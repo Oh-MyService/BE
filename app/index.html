@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prompt 데이터 주고받기</title>
+    <script>
+        let currentPromptId = null;
+
+        async function submitPrompt() {
+            let content = document.getElementById('promptInput').value;
+            let userId = 1;  // 수정 필요 임의로 1이라 함
+
+            try {
+                let response = await fetch('http://127.0.0.1:8000/prompts/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({content: content, user_id: userId})
+                });
+                if (response.ok) {
+                    let result = await response.json();
+                    currentPromptId = result.id;
+                    document.getElementById('displayArea').textContent = 'Prompt saved: ' + result.content;
+                } else {
+                    throw new Error('Failed to save the prompt');
+                }
+            } catch (error) {
+                alert(error);
+            }
+        }
+
+        async function submitImage() {
+            if (!currentPromptId) {
+                alert('Please save a prompt first.');
+                return;
+            }
+            
+            let imageInput = document.getElementById('imageInput').files[0];
+            let formData = new FormData();
+            formData.append('image', imageInput);
+            formData.append('prompt_id', currentPromptId);
+            formData.append('user_id', 1);  // 수정 필요 임의로 1이라 함
+
+            try {
+                let response = await fetch('http://127.0.0.1:8000/results/', {
+                    method: 'POST',
+                    body: formData
+                });
+                if (response.ok) {
+                    let result = await response.json();
+                    document.getElementById('imageDisplayArea').textContent = 'Image saved with ID: ' + result.id;
+                } else {
+                    throw new Error('Failed to save the image');
+                }
+            } catch (error) {
+                alert(error);
+            }
+        }
+
+        async function fetchAllImages() {
+            try {
+                let response = await fetch('http://127.0.0.1:8000/results/', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                if (response.ok) {
+                    let results = await response.json();
+                    let imageDisplayArea = document.getElementById('imageDisplayArea');
+                    imageDisplayArea.innerHTML = '';  
+                    results.forEach(result => {
+                        let img = document.createElement('img');
+                        img.src = 'data:image/jpeg;base64,' + result.image_data;
+                        img.alt = 'Image ID: ' + result.id;
+                        img.width = 200;  
+                        imageDisplayArea.appendChild(img);
+                    });
+                } else {
+                    throw new Error('Failed to fetch images');
+                }
+            } catch (error) {
+                alert(error);
+            }
+        }
+    </script>
+</head>
+<body>
+    <h1>Prompt 저장</h1>
+    <input type="text" id="promptInput" placeholder="Enter your prompt here">
+    <button onclick="submitPrompt()">Save Prompt</button>
+   
+    <h3>저장 내용 출력:</h3>
+    <div id="displayArea"></div>
+
+    <br>
+    <h1>Result 이미지</h1>
+    <input type="file" id="imageInput">
+    <button onclick="submitImage()">Save Image</button>
+    
+    <br>
+    <h3>저장된 이미지 출력:</h3>
+    <button onclick="fetchAllImages()">Fetch All Images</button>
+    <div id="imageDisplayArea"></div>
+
+    <br>
+    <h1>구글 로그인 :</h1>
+    <h3><a href="http://localhost:8000/login">Login with Google</a></h3>
+</body>
+</html>
