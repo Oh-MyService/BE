@@ -1,11 +1,34 @@
-<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>로그인 완료</title>
+    <title>Login Complete</title>
+    <script>
+        // 사용자 정보 가져오기 함수
+        async function displayUserInfo() {
+            try {
+                let response = await fetch('/user_info');
+                if (response.ok) {
+                    let userInfo = await response.json();
+                    console.log(userInfo); // 사용자 정보를 콘솔에 출력
+                    let welcomeMessage = document.getElementById('welcomeMessage');
+                    welcomeMessage.textContent = `환영합니다, ${userInfo.name}님 (User ID: ${userInfo.user_id})`;
+                } else {
+                    throw new Error('Failed to fetch user info');
+                }
+            } catch (error) {
+                alert(error);
+            }
+        }
+
+        // 페이지 로드 시 사용자 정보 표시
+        window.onload = function() {
+            displayUserInfo();
+        };
+    </script>
 </head>
 <body>
-    <h1>로그인 완료</h1>
+    <h1 id="welcomeMessage">Loading...</h1>
+    <b>hi!</b>
 </body>
 </html>

@@ -1,8 +1,7 @@
-from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Form
+from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Form, Request
 from sqlalchemy.orm import Session
-from fastapi.security import OAuth2AuthorizationCodeBearer
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.responses import RedirectResponse, FileResponse
+from starlette.responses import RedirectResponse, FileResponse, JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
 import httpx
 from typing import List
@@ -63,9 +62,8 @@ def get_db():
     finally:
         db.close()
 
-# User 검사 관련
 @app.get("/auth")
-async def auth(code: str, db: Session = Depends(get_db)):
+async def auth(request: Request, code: str, db: Session = Depends(get_db)):
     async with httpx.AsyncClient() as client:
         token_response = await client.post(
             TOKEN_URL,
@@ -91,11 +89,14 @@ async def auth(code: str, db: Session = Depends(get_db)):
         name = user_info.get("name")
         picture = user_info.get("picture")
 
-        # Check if user already exists
+        # 사용자 정보 저장 로직
         db_user = crud.get_user_by_email(db, email=email)
         if not db_user:
             user_data = schemas.UserCreate(email=email, name=name, picture=picture)
             db_user = crud.create_user(db=db, user=user_data)
+
+        # 사용자 정보 세션에 저장
+        request.session['user_info'] = {"user_id": db_user.id, "email": email, "name": name, "picture": picture}
 
         # Redirect to login complete page
         return RedirectResponse(url="/login-complete")
@@ -103,6 +104,14 @@ async def auth(code: str, db: Session = Depends(get_db)):
 @app.get("/login-complete")
 async def login_complete():
     return FileResponse(login_complete_file)
+
+@app.get("/user_info")
+async def get_user_info(request: Request):
+    user_info = request.session.get('user_info')
+    if user_info:
+        return JSONResponse(content=user_info)
+    else:
+        raise HTTPException(status_code=401, detail="User not authenticated")
 
 @app.post("/prompts/", response_model=schemas.Prompt)
 def create_prompt(prompt_data: schemas.PromptCreate, db: Session = Depends(get_db)):
@@ -122,7 +131,6 @@ async def create_result(prompt_id: int = Form(...), user_id: int = Form(...), im
     db_result.image_data = base64.b64encode(db_result.image_data).decode('utf-8')
     return db_result
 
-
 @app.get("/results/", response_model=List[schemas.Result])
 def get_all_results(db: Session = Depends(get_db)):
     results = crud.get_all_results(db)
@@ -139,7 +147,6 @@ def get_all_results(db: Session = Depends(get_db)):
         }
         results_encoded.append(result_dict)
     return results_encoded
-
 
 if __name__ == "__main__":
     import uvicorn
