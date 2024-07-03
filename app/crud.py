@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from datetime import datetime
 from app import models, schemas
 
@@ -24,13 +24,14 @@ def create_result(db: Session, prompt_id: int, image_data: bytes, user_id: int):
     db.refresh(db_result)
     return db_result
 
-
-
 def get_results_by_prompt(db: Session, prompt_id: int):
     return db.query(models.Result).filter(models.Result.prompt_id == prompt_id).all()
 
 def get_all_results(db: Session):
-    return db.query(models.Result).all()
+    return db.query(models.Result).options(
+        joinedload(models.Result.user),
+        joinedload(models.Result.prompt)
+    ).all()
 
 def get_user_by_email(db: Session, email: str):
     return db.query(models.User).filter(models.User.email == email).first()

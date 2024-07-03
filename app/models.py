@@ -47,12 +47,11 @@ class Result(Base):
 class Collection(Base):
     __tablename__ = "collections"
 
-    id = Column(Integer, primary_key=True, index=True)
+    collection_id = Column(Integer, primary_key=True, index=True)
     created_at = Column(DateTime, nullable=False)
     user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     result_id = Column(Integer, ForeignKey('results.id', ondelete='CASCADE'), nullable=False)
     prompt_id = Column(Integer, ForeignKey('prompts.id', ondelete='CASCADE'), nullable=False)
-
     user = relationship("User", back_populates="collections")
     result = relationship("Result", back_populates="collections")
     prompt = relationship("Prompt", back_populates="collections")

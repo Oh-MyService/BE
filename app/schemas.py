@@ -40,6 +40,8 @@ class ResultBase(BaseModel):
     prompt_id: int
 
 class ResultCreate(ResultBase):
+    user_id: int
+    prompt_id: int
     pass
 
 class Result(ResultBase):
@@ -61,7 +63,7 @@ class CollectionCreate(CollectionBase):
     pass
 
 class Collection(CollectionBase):
-    id: int
+    collection_id: int
     user: User
     result: Result
     prompt: Prompt

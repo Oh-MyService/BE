@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Page</title>
+</head>
+<body>
+    <h1 id="welcomeMessage">Loading...</h1>
+    <h2>최근 생성한 패턴</h2>
+    <div id="resultsContainer"></div>
+
+    <script>
+        let currentPromptId = null;
+        let userInfo = null;
+
+        // 사용자 정보 가져오기 함수
+        async function displayUserInfo() {
+            try {
+                let response = await fetch('/user_info');
+                if (response.ok) {
+                    userInfo = await response.json();
+                    console.log(userInfo); // 사용자 정보를 콘솔에 출력
+                    let welcomeMessage = document.getElementById('welcomeMessage');
+                    if (welcomeMessage) {
+                        welcomeMessage.textContent = `${userInfo.name}님 마이페이지 (User ID: ${userInfo.user_id})`;
+                        displayUserResults(userInfo.user_id); // 유저 ID로 결과 표시
+                    } else {
+                        console.error("Element with id 'welcomeMessage' not found");
+                    }
+                } else {
+                    throw new Error('Failed to fetch user info');
+                }
+            } catch (error) {
+                alert(error);
+            }
+        }
+
+        // 유저의 results 가져오기 함수
+        async function displayUserResults(userId) {
+            try {
+                let response = await fetch('/user_results/');
+                if (response.ok) {
+                    let results = await response.json();
+                    let resultsContainer = document.getElementById('resultsContainer');
+                    resultsContainer.innerHTML = ''; // 기존 내용을 지웁니다.
+                    
+                    results.forEach(result => {
+                        let img = document.createElement('img');
+                        img.src = 'data:image/jpeg;base64,' + result.image_data;
+                        img.alt = 'Result ID: ' + result.id;
+                        img.width = 200;
+                        resultsContainer.appendChild(img);
+                    });
+                } else {
+                    throw new Error('Failed to fetch user results');
+                }
+            } catch (error) {
+                alert(error);
+            }
+        }
+
+        // 페이지 로드 시 사용자 정보 표시
+        window.onload = function() {
+            displayUserInfo();
+        };
+    </script>
+</body>
+</html>

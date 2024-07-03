@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Form, Request
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import RedirectResponse, FileResponse, JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
@@ -23,9 +23,9 @@ app = FastAPI()
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 모든 도메인에서의 요청을 허용
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # 모든 HTTP 메서드를 허용
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -134,19 +134,30 @@ async def create_result(prompt_id: int = Form(...), user_id: int = Form(...), im
 @app.get("/results/", response_model=List[schemas.Result])
 def get_all_results(db: Session = Depends(get_db)):
     results = crud.get_all_results(db)
-    results_encoded = []
     for result in results:
-        result_dict = {
-            "id": result.id,
-            "created_at": result.created_at,
-            "prompt_id": result.prompt_id,
-            "image_data": base64.b64encode(result.image_data).decode('utf-8'),
-            "user_id": result.user_id,
-            "user": result.user,
-            "prompt": result.prompt
-        }
-        results_encoded.append(result_dict)
-    return results_encoded
+        result.image_data = base64.b64encode(result.image_data).decode('utf-8')
+    return results
+
+@app.get("/my-page")
+async def my_page():
+    return FileResponse(os.path.join(current_dir, "my_page.html"))
+
+@app.get("/user_results/", response_model=List[schemas.Result])
+def get_user_results(request: Request, db: Session = Depends(get_db)):
+    user_info = request.session.get('user_info')
+    if not user_info:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    user_id = user_info['user_id']
+    results = db.query(models.Result).filter(models.Result.user_id == user_id).options(
+        joinedload(models.Result.user),
+        joinedload(models.Result.prompt)
+    ).all()
+
+    for result in results:
+        result.image_data = base64.b64encode(result.image_data).decode('utf-8')
+    
+    return results
 
 if __name__ == "__main__":
     import uvicorn
