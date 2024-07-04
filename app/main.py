@@ -4,12 +4,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import RedirectResponse, FileResponse, JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
 import httpx
-from typing import List
+from typing import List, Optional
 from dotenv import load_dotenv
 from . import crud, models, schemas
 from .database import SessionLocal, engine
 import base64
 import os
+from datetime import datetime
+from pydantic import BaseModel
 
 # Load environment variables from .env file
 load_dotenv()
@@ -43,6 +45,9 @@ USER_INFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
 current_dir = os.path.dirname(os.path.abspath(__file__))
 index_file = os.path.join(current_dir, "index.html")
 login_complete_file = os.path.join(current_dir, "login_complete.html")
+
+class AddResultToCollection(BaseModel):
+    result_id: int
 
 @app.get("/")
 async def read_root():
@@ -142,7 +147,7 @@ def get_all_results(db: Session = Depends(get_db)):
 async def my_page():
     return FileResponse(os.path.join(current_dir, "my_page.html"))
 
-@app.get("/user_results/", response_model=List[schemas.Result])
+@app.get("/user_results/")
 def get_user_results(request: Request, db: Session = Depends(get_db)):
     user_info = request.session.get('user_info')
     if not user_info:
@@ -154,10 +159,122 @@ def get_user_results(request: Request, db: Session = Depends(get_db)):
         joinedload(models.Result.prompt)
     ).all()
 
+    collections = db.query(models.Collection).filter(models.Collection.user_id == user_id).all()
+
+    # 결과를 사전 형태로 변환
+    results_data = []
     for result in results:
-        result.image_data = base64.b64encode(result.image_data).decode('utf-8')
+        result_data = {
+            "id": result.id,
+            "created_at": result.created_at,
+            "prompt_id": result.prompt_id,
+            "image_data": base64.b64encode(result.image_data).decode('utf-8'),
+            "user_id": result.user_id,
+        }
+        results_data.append(result_data)
+
+    # 컬렉션을 사전 형태로 변환
+    collections_data = []
+    for collection in collections:
+        collection_data = {
+            "collection_id": collection.collection_id,
+            "created_at": collection.created_at,
+            "user_id": collection.user_id,
+            "result_id": collection.result_id,
+            "prompt_id": collection.prompt_id,
+        }
+        collections_data.append(collection_data)
+
+    # 컬렉션이 비어있는 경우 메시지 추가
+    if not collections_data:
+        collections_data = [{"message": "컬렉션이 비었습니다"}]
+
+    return {
+        "results": results_data,
+        "collections": collections_data
+    }
+
+
+
+
+@app.post("/collections/", response_model=dict)
+def create_collection(request: Request, user_id: int = Form(...), result_id: Optional[int] = Form(None), prompt_id: Optional[int] = Form(None), db: Session = Depends(get_db)):
+    created_at = datetime.now()
+    new_collection = models.Collection(created_at=created_at, user_id=user_id, result_id=result_id, prompt_id=prompt_id)
+    db.add(new_collection)
+    db.commit()
+    db.refresh(new_collection)
     
-    return results
+    # 컬렉션을 사전 형태로 변환
+    collection_data = {
+        "collection_id": new_collection.collection_id,
+        "created_at": new_collection.created_at,
+        "user_id": new_collection.user_id,
+        "result_id": new_collection.result_id,
+        "prompt_id": new_collection.prompt_id,
+        "result": None,
+        "prompt": None
+    }
+    
+    if new_collection.result_id:
+        result = db.query(models.Result).filter(models.Result.id == new_collection.result_id).first()
+        collection_data["result"] = {
+            "id": result.id,
+            "created_at": result.created_at,
+            "prompt_id": result.prompt_id,
+            "image_data": base64.b64encode(result.image_data).decode('utf-8'),
+            "user_id": result.user_id,
+        }
+    
+    if new_collection.prompt_id:
+        prompt = db.query(models.Prompt).filter(models.Prompt.id == new_collection.prompt_id).first()
+        collection_data["prompt"] = {
+            "id": prompt.id,
+            "created_at": prompt.created_at,
+            "content": prompt.content,
+            "user_id": prompt.user_id,
+        }
+
+    return collection_data
+
+
+@app.post("/collections/{collection_id}/add_result")
+def add_result_to_collection(collection_id: int, data: AddResultToCollection, db: Session = Depends(get_db)):
+    collection = db.query(models.Collection).filter(models.Collection.collection_id == collection_id).first()
+    if not collection:
+        raise HTTPException(status_code=404, detail="Collection not found")
+
+    # 결과 ID 업데이트
+    collection.result_id = data.result_id
+    db.commit()
+    db.refresh(collection)
+
+    return {"message": "Result added to collection successfully"}
+
+
+@app.get("/user_collections/", response_model=List[schemas.Collection])
+def get_user_collections(request: Request, db: Session = Depends(get_db)):
+    user_info = request.session.get('user_info')
+    if not user_info:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    user_id = user_info['user_id']
+    collections = db.query(models.Collection).filter(models.Collection.user_id == user_id).all()
+
+    if not collections:
+        return [{"message": "컬렉션이 비었습니다"}]
+
+    collections_data = []
+    for collection in collections:
+        collections_data.append({
+            "collection_id": collection.collection_id,
+            "created_at": collection.created_at,
+            "user_id": collection.user_id,
+            "result_id": collection.result_id,
+            "prompt_id": collection.prompt_id,
+        })
+
+    return collections_data
 
 if __name__ == "__main__":
     import uvicorn

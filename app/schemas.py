@@ -54,12 +54,23 @@ class Result(ResultBase):
 
 ### Collection 스키마 ###
 class CollectionBase(BaseModel):
+    collection_id: int
     created_at: datetime
     user_id: int
-    result_id: int
-    prompt_id: int
+    result_id: Optional[int] = None
+    prompt_id: Optional[int] = None
+    user: Optional[dict] = None
+    result: Optional[dict] = None
+    prompt: Optional[dict] = None
+
+    class Config:
+        orm_mode = True
+
 
 class CollectionCreate(CollectionBase):
+    created_at: datetime
+    result_id: Optional[int] = None
+    prompt_id: Optional[int] = None
     pass
 
 class Collection(CollectionBase):

@@ -48,10 +48,14 @@ class Collection(Base):
     __tablename__ = "collections"
 
     collection_id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime, nullable=False)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    result_id = Column(Integer, ForeignKey('results.id', ondelete='CASCADE'), nullable=False)
-    prompt_id = Column(Integer, ForeignKey('prompts.id', ondelete='CASCADE'), nullable=False)
+    created_at = Column(DateTime, nullable=True)
+   # user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
+    #result_id = Column(Integer, ForeignKey('results.id', ondelete='CASCADE'), nullable=False)
+    result_id = Column(Integer, ForeignKey('results.id', ondelete='CASCADE'), nullable=True)
+    #prompt_id = Column(Integer, ForeignKey('prompts.id', ondelete='CASCADE'), nullable=False)
+    prompt_id = Column(Integer, ForeignKey('prompts.id', ondelete='CASCADE'), nullable=True)
     user = relationship("User", back_populates="collections")
     result = relationship("Result", back_populates="collections")
     prompt = relationship("Prompt", back_populates="collections")
+    
