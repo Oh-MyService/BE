@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 ### User 스키마 ###
 class UserBase(BaseModel):
@@ -76,8 +76,11 @@ class CollectionCreate(CollectionBase):
 class Collection(CollectionBase):
     collection_id: int
     user: User
-    result: Result
+    results: List[int] = []
     prompt: Prompt
 
     class Config:
         orm_mode = True
+
+#class AddResultToCollection(BaseModel):
+   # result_id: int

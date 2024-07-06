@@ -42,3 +42,15 @@ def create_user(db: Session, user: schemas.UserCreate):
     db.commit()
     db.refresh(db_user)
     return db_user
+
+#def add_result_to_collection(db: Session, collection_id: int, result_id: int):
+    collection = db.query(models.Collection).filter(models.Collection.collection_id == collection_id).first()
+    result = db.query(models.Result).filter(models.Result.id == result_id).first()
+    if not collection or not result:
+        return None
+    association = models.CollectionResultAssociation(collection_id=collection_id, result_id=result_id)
+    db.add(association)
+    collection.prompt_id = result.prompt_id
+    db.commit()
+    return collection
+
