@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine.url import URL
 
 # MySQL 데이터베이스 연결 URL 설정
-SQLALCHEMY_DATABASE_URL = "mysql+pymysql://root:0820@localhost:3306/test1"
+SQLALCHEMY_DATABASE_URL = "mysql+pymysql://root:root@43.202.57.225:21212/my_database"
 
 # SQLAlchemy 엔진 생성
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
