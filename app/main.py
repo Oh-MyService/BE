@@ -16,9 +16,6 @@ from pydantic import BaseModel
 # Load environment variables from .env file
 load_dotenv()
 
-# Initialize the database
-models.Base.metadata.create_all(bind=engine)
-
 # Initialize the FastAPI app
 app = FastAPI()
 
