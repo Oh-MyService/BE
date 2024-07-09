@@ -1,0 +1,67 @@
+name: Deploy FastAPI to Amazon Lightsail
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  AWS_REGION: us-east-1
+  LIGHTSAIL_INSTANCE_IP: ${{ secrets.LIGHTSAIL_INSTANCE_IP }}
+  SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
+  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR Public
+      id: login-ecr-public
+      uses: aws-actions/amazon-ecr-login@v1
+      with:
+        registry-type: public
+
+    - name: Build, tag, and push image to Amazon ECR Public
+      id: build-image
+      env:
+        REGISTRY: ${{ steps.login-ecr-public.outputs.registry }}
+        REGISTRY_ALIAS: d0v2k3o3 # 본인의 alias 입력
+        REPOSITORY: ohmyservice_backend # 본인의 repository명 입력
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        docker build --no-cache -t $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG .
+        docker push $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG
+        echo "image=$REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+    - name: Install SSH client
+      run: sudo apt-get install -y openssh-client
+
+    - name: Copy SSH key
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+
+    - name: Deploy to Amazon Lightsail
+      env:
+        IMAGE: ${{ steps.build-image.outputs.image }}
+      run: |
+        ssh -o StrictHostKeyChecking=no $SSH_USERNAME@$LIGHTSAIL_INSTANCE_IP << EOF
+          IMAGE=${IMAGE}
+          sudo docker pull \$IMAGE
+          sudo docker stop fastapi_app || true
+          sudo docker rm fastapi_app || true
+          sudo docker run -d --name fastapi_app -p 28282:8000 --env-file .env \$IMAGE
+        EOF
