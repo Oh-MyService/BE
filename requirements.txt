@@ -4,3 +4,4 @@ pymysql
 sqlalchemy
 python-dotenv
 redis
+itsdangerous
