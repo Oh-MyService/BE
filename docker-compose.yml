@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "28282:8000"
+    depends_on:
+      - redis
+    environment:
+      - DATABASE_URL=mysql+pymysql://user:password@mysql_container:21212/mydatabase
+      - REDIS_URL=redis://redis:6379
+
+  redis:
+    image: "redis:latest"
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:
