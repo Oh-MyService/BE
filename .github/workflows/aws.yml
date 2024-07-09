@@ -54,6 +54,10 @@ jobs:
         echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
 
+    - name: Copy .env file to Lightsail instance
+      run: |
+        scp -o StrictHostKeyChecking=no .env $SSH_USERNAME@$LIGHTSAIL_INSTANCE_IP:/home/$SSH_USERNAME/.env
+
     - name: Deploy to Amazon Lightsail
       env:
         IMAGE: ${{ steps.build-image.outputs.image }}
@@ -63,5 +67,5 @@ jobs:
           sudo docker pull \$IMAGE
           sudo docker stop fastapi_app || true
           sudo docker rm fastapi_app || true
-          sudo docker run -d --name fastapi_app -p 28282:8000 --env-file .env \$IMAGE
+          sudo docker run -d --name fastapi_app --env-file /home/$SSH_USERNAME/.env -p 28282:8000 \$IMAGE
         EOF
