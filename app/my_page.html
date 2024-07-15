@@ -11,7 +11,13 @@
     <div id="resultsContainer"></div>
     <h2>내 컬렉션</h2>
     <b>컬렉션 추가</b>
-    <button onclick="createNewCollection()">새 컬렉션 추가</button>
+    <button onclick="showCollectionForm()">새 컬렉션 추가</button>
+
+    <form id="collectionForm" style="display:none;">
+        <label for="collectionName">컬렉션 이름:</label>
+        <input type="text" id="collectionName" name="collectionName" required>
+        <button type="button" onclick="createNewCollection()">컬렉션 생성</button>
+    </form>
 
     <script>
         let currentPromptId = null;
@@ -109,8 +115,20 @@
             }
         }
 
+        // 새 컬렉션 생성 폼 표시 함수
+        function showCollectionForm() {
+            document.getElementById('collectionForm').style.display = 'block';
+        }
+
         // 새 컬렉션 생성 함수
         async function createNewCollection() {
+            const collectionName = document.getElementById('collectionName').value;
+
+            if (!collectionName) {
+                alert('컬렉션 이름을 입력하세요.');
+                return;
+            }
+
             try {
                 let response = await fetch('/collections/', {
                     method: 'POST',
@@ -119,8 +137,7 @@
                     },
                     body: new URLSearchParams({
                         user_id: userInfo.user_id,  // 현재 유저의 user_id 포함
-                        result_id: '',  // 새 컬렉션 생성 시 기본값
-                        prompt_id: ''   // 새 컬렉션 생성 시 기본값
+                        collection_name: collectionName
                     })
                 });
                 if (response.ok) {

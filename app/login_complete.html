@@ -115,30 +115,36 @@
 
         async function fetchAllImages() {
             try {
-                let response = await fetch('http://127.0.0.1:8000/results/', {
-                    method: 'GET',
+                const response = await fetch("/results/", {
+                    method: "GET",
                     headers: {
-                        'Content-Type': 'application/json',
-                    }
+                        "Content-Type": "application/json"
+                    },
+                    credentials: "include"  // 이 옵션을 사용하여 세션 정보를 포함
                 });
-                if (response.ok) {
-                    let results = await response.json();
-                    let imageDisplayArea = document.getElementById('imageDisplayArea');
-                    imageDisplayArea.innerHTML = '';
-                    results.forEach(result => {
-                        let img = document.createElement('img');
-                        img.src = 'data:image/jpeg;base64,' + result.image_data;
-                        img.alt = 'Image ID: ' + result.id;
-                        img.width = 200;
-                        imageDisplayArea.appendChild(img);
-                    });
-                } else {
-                    throw new Error('Failed to fetch images');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
                 }
+                
+                const data = await response.json();
+                displayImages(data);
             } catch (error) {
-                alert(error);
+                console.error("Failed to fetch images:", error);
             }
         }
+
+        
+        function displayImages(images) {
+            const output = document.getElementById('imageDisplayArea');
+            output.innerHTML = '';
+            images.forEach(img => {
+                const imgElement = document.createElement('img');
+                imgElement.src = `data:image/jpeg;base64,${img.image_data}`;
+                output.appendChild(imgElement);
+            });
+        }
+
 
         // DOMContentLoaded 이벤트 핸들러
         document.addEventListener('DOMContentLoaded', function() {

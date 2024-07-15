@@ -1,37 +1,43 @@
-from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Form, Request
-from sqlalchemy.orm import Session, joinedload
+# uvicorn app.main:app --reload
+
+from fastapi import FastAPI, Depends, HTTPException, Request, Form, UploadFile, File
+from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import RedirectResponse, FileResponse, JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
 import httpx
 from typing import List, Optional
 from dotenv import load_dotenv
-from . import crud, models, schemas
-from .database import SessionLocal, engine
 import base64
 import os
 from datetime import datetime
-from pydantic import BaseModel
 
-# Load environment variables from .env file
+from . import crud
+from .database import get_db
+from .models import User, Prompt, Result, Collection, CollectionResult
+from .utils import sqlalchemy_to_pydantic
+
+# .env 파일에서 환경 변수 로드
 load_dotenv()
 
-# Initialize the FastAPI app
+# DATABASE_URL 출력하여 확인
+print(f"DATABASE_URL: {os.getenv('DATABASE_URL')}")
+
 app = FastAPI()
 
-# Add CORS middleware
+# CORS 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:8000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Add session middleware
-app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY", "supersecretkey"))
+# 세션 미들웨어 설정
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY"))
 
-# OAuth2 settings
+# .env 파일에서 Google OAuth 환경 변수 읽기
 CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 REDIRECT_URI = "http://localhost:8000/auth"
@@ -39,73 +45,79 @@ AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 USER_INFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
 
+# 현재 디렉토리 설정
 current_dir = os.path.dirname(os.path.abspath(__file__))
 index_file = os.path.join(current_dir, "index.html")
 login_complete_file = os.path.join(current_dir, "login_complete.html")
 
-class AddResultToCollection(BaseModel):
-    result_id: int
-
 @app.get("/")
 async def read_root():
-    return FileResponse(index_file)
+    try:
+        return FileResponse(index_file)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading index file: {e}")
 
 @app.get("/login")
 async def login():
-    return RedirectResponse(
-        f"{AUTHORIZATION_URL}?response_type=code&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=openid%20email%20profile"
-    )
-
-# Dependency to get the database session
-def get_db():
-    db = SessionLocal()
     try:
-        yield db
-    finally:
-        db.close()
+        return RedirectResponse(
+            f"{AUTHORIZATION_URL}?response_type=code&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=openid%20email%20profile"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error during login: {e}")
 
 @app.get("/auth")
 async def auth(request: Request, code: str, db: Session = Depends(get_db)):
-    async with httpx.AsyncClient() as client:
-        token_response = await client.post(
-            TOKEN_URL,
-            data={
-                "code": code,
-                "client_id": CLIENT_ID,
-                "client_secret": CLIENT_SECRET,
-                "redirect_uri": REDIRECT_URI,
-                "grant_type": "authorization_code",
-            },
-        )
-        token_response_data = token_response.json()
-        access_token = token_response_data.get("access_token")
-        if not access_token:
-            raise HTTPException(status_code=401, detail="Invalid client credentials")
+    try:
+        async with httpx.AsyncClient() as client:
+            token_response = await client.post(
+                TOKEN_URL,
+                data={
+                    "code": code,
+                    "client_id": CLIENT_ID,
+                    "client_secret": CLIENT_SECRET,
+                    "redirect_uri": REDIRECT_URI,
+                    "grant_type": "authorization_code",
+                },
+            )
+            token_response.raise_for_status()
+            token_response_data = token_response.json()
+            access_token = token_response_data.get("access_token")
+            if not access_token:
+                raise HTTPException(status_code=401, detail="Invalid client credentials")
 
-        user_info_response = await client.get(
-            USER_INFO_URL,
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-        user_info = user_info_response.json()
-        email = user_info.get("email")
-        name = user_info.get("name")
-        picture = user_info.get("picture")
+            user_info_response = await client.get(
+                USER_INFO_URL,
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            user_info_response.raise_for_status()
+            user_info = user_info_response.json()
+            email = user_info.get("email")
+            name = user_info.get("name")
+            picture = user_info.get("picture")
 
-        # 사용자 정보 저장 로직
-        db_user = crud.get_user_by_email(db, email=email)
-        if not db_user:
-            user_data = schemas.UserCreate(email=email, name=name, picture=picture)
-            db_user = crud.create_user(db=db, user=user_data)
+            # 데이터베이스에서 사용자 조회
+            db_user = db.query(User).filter(User.email == email).first()
+            if not db_user:
+                # 사용자 데이터가 없으면 새 사용자 생성
+                user_data = {"email": email, "name": name, "profileimg": picture}
+                db_user = crud.create_record(db=db, model=User, **user_data)
 
-        # 사용자 정보 세션에 저장
-        request.session['user_info'] = {"user_id": db_user.id, "email": email, "name": name, "picture": picture}
+            # 세션에 사용자 정보 저장
+            request.session['user_info'] = {"user_id": db_user.id, "email": email, "name": name, "picture": picture}
 
-        # Redirect to login complete page
-        return RedirectResponse(url="/login-complete")
+            return RedirectResponse(url="/login-complete")
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error during authentication: {e}")
 
 @app.get("/login-complete")
 async def login_complete():
-    return FileResponse(login_complete_file)
+    try:
+        return FileResponse(login_complete_file)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading login complete file: {e}")
 
 @app.get("/user_info")
 async def get_user_info(request: Request):
@@ -115,34 +127,65 @@ async def get_user_info(request: Request):
     else:
         raise HTTPException(status_code=401, detail="User not authenticated")
 
-@app.post("/prompts/", response_model=schemas.Prompt)
-def create_prompt(prompt_data: schemas.PromptCreate, db: Session = Depends(get_db)):
-    return crud.create_prompt(db=db, prompt_content=prompt_data.content, user_id=prompt_data.user_id)
+@app.post("/prompts/")
+def create_prompt(prompt_data: dict, db: Session = Depends(get_db)):
+    try:
+        prompt_data['created_at'] = datetime.now()
+        return crud.create_record(db=db, model=Prompt, **prompt_data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating prompt: {e}")
 
-@app.get("/prompts/{prompt_id}", response_model=schemas.Prompt)
+@app.get("/prompts/{prompt_id}")
 def read_prompt(prompt_id: int, db: Session = Depends(get_db)):
-    db_prompt = crud.get_prompt(db, prompt_id=prompt_id)
-    if db_prompt is None:
-        raise HTTPException(status_code=404, detail="Prompt not found")
-    return db_prompt
+    try:
+        db_prompt = crud.get_record(db, Prompt, prompt_id)
+        if db_prompt is None:
+            raise HTTPException(status_code=404, detail="Prompt not found")
+        PromptResponse = sqlalchemy_to_pydantic(Prompt)
+        return PromptResponse.from_orm(db_prompt)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading prompt: {e}")
 
-@app.post("/results/", response_model=schemas.Result)
+@app.post("/results/")
 async def create_result(prompt_id: int = Form(...), user_id: int = Form(...), image: UploadFile = File(...), db: Session = Depends(get_db)):
-    image_data = await image.read()
-    db_result = crud.create_result(db=db, prompt_id=prompt_id, image_data=image_data, user_id=user_id)
-    db_result.image_data = base64.b64encode(db_result.image_data).decode('utf-8')
-    return db_result
+    try:
+        image_data = await image.read()
+        result_data = {"prompt_id": prompt_id, "user_id": user_id, "image_data": image_data, "created_at": datetime.now()}
+        db_result = crud.create_record(db=db, model=Result, **result_data)
+        db_result.image_data = base64.b64encode(db_result.image_data).decode('utf-8')
+        ResultResponse = sqlalchemy_to_pydantic(Result)
+        return ResultResponse.from_orm(db_result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating result: {e}")
 
-@app.get("/results/", response_model=List[schemas.Result])
-def get_all_results(db: Session = Depends(get_db)):
-    results = crud.get_all_results(db)
-    for result in results:
-        result.image_data = base64.b64encode(result.image_data).decode('utf-8')
-    return results
+@app.get("/results/")
+def get_all_results(request: Request, db: Session = Depends(get_db)):
+    user_info = request.session.get('user_info')
+    if not user_info:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    try:
+        user_id = user_info['user_id']
+        results = db.query(Result).filter(Result.user_id == user_id).all()
+        results_data = []
+        
+        for result in results:
+            result_dict = {column.name: getattr(result, column.name) for column in result.__table__.columns}
+            result_dict["image_data"] = base64.b64encode(result_dict["image_data"]).decode('utf-8')
+            results_data.append(result_dict)
+        
+        return results_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching results: {e}")
 
 @app.get("/my-page")
 async def my_page():
-    return FileResponse(os.path.join(current_dir, "my_page.html"))
+    try:
+        return FileResponse(os.path.join(current_dir, "my_page.html"))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading my page: {e}")
 
 @app.get("/user_results/")
 def get_user_results(request: Request, db: Session = Depends(get_db)):
@@ -150,128 +193,71 @@ def get_user_results(request: Request, db: Session = Depends(get_db)):
     if not user_info:
         raise HTTPException(status_code=401, detail="User not authenticated")
 
-    user_id = user_info['user_id']
-    results = db.query(models.Result).filter(models.Result.user_id == user_id).options(
-        joinedload(models.Result.user),
-        joinedload(models.Result.prompt)
-    ).all()
+    try:
+        user_id = user_info['user_id']
+        results = db.query(Result).filter(Result.user_id == user_id).all()
+        collections = db.query(Collection).filter(Collection.user_id == user_id).all()
 
-    collections = db.query(models.Collection).filter(models.Collection.user_id == user_id).all()
+        results_data = []
+        for result in results:
+            result_dict = {column.name: getattr(result, column.name) for column in result.__table__.columns}
+            result_dict["image_data"] = base64.b64encode(result_dict["image_data"]).decode('utf-8')
+            results_data.append(result_dict)
 
-    # 결과를 사전 형태로 변환
-    results_data = []
-    for result in results:
-        result_data = {
-            "id": result.id,
-            "created_at": result.created_at,
-            "prompt_id": result.prompt_id,
-            "image_data": base64.b64encode(result.image_data).decode('utf-8'),
-            "user_id": result.user_id,
+        collections_data = []
+        for collection in collections:
+            collection_dict = {column.name: getattr(collection, column.name) for column in collection.__table__.columns}
+            collections_data.append(collection_dict)
+
+        if not collections_data:
+            collections_data = [{"message": "컬렉션이 비었습니다"}]
+
+        return {
+            "results": results_data,
+            "collections": collections_data
         }
-        results_data.append(result_data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching user results and collections: {e}")
 
-    # 컬렉션을 사전 형태로 변환
-    collections_data = []
-    for collection in collections:
-        collection_data = {
-            "collection_id": collection.collection_id,
-            "created_at": collection.created_at,
-            "user_id": collection.user_id,
-            "result_id": collection.result_id,
-            "prompt_id": collection.prompt_id,
-        }
-        collections_data.append(collection_data)
-
-    # 컬렉션이 비어있는 경우 메시지 추가
-    if not collections_data:
-        collections_data = [{"message": "컬렉션이 비었습니다"}]
-
-    return {
-        "results": results_data,
-        "collections": collections_data
-    }
-
-
-
-
-@app.post("/collections/", response_model=dict)
-def create_collection(request: Request, user_id: int = Form(...), result_id: Optional[int] = Form(None), prompt_id: Optional[int] = Form(None), db: Session = Depends(get_db)):
-    created_at = datetime.now()
-    new_collection = models.Collection(created_at=created_at, user_id=user_id, result_id=result_id, prompt_id=prompt_id)
-    db.add(new_collection)
-    db.commit()
-    db.refresh(new_collection)
-    
-    # 컬렉션을 사전 형태로 변환
-    collection_data = {
-        "collection_id": new_collection.collection_id,
-        "created_at": new_collection.created_at,
-        "user_id": new_collection.user_id,
-        "result_id": new_collection.result_id,
-        "prompt_id": new_collection.prompt_id,
-        "result": None,
-        "prompt": None
-    }
-    
-    if new_collection.result_id:
-        result = db.query(models.Result).filter(models.Result.id == new_collection.result_id).first()
-        collection_data["result"] = {
-            "id": result.id,
-            "created_at": result.created_at,
-            "prompt_id": result.prompt_id,
-            "image_data": base64.b64encode(result.image_data).decode('utf-8'),
-            "user_id": result.user_id,
-        }
-    
-    if new_collection.prompt_id:
-        prompt = db.query(models.Prompt).filter(models.Prompt.id == new_collection.prompt_id).first()
-        collection_data["prompt"] = {
-            "id": prompt.id,
-            "created_at": prompt.created_at,
-            "content": prompt.content,
-            "user_id": prompt.user_id,
-        }
-
-    return collection_data
-
+@app.post("/collections/")
+def create_collection(collection_name: str = Form(...), user_id: int = Form(...), db: Session = Depends(get_db)):
+    try:
+        collection_data = {"created_at": datetime.now(), "user_id": user_id, "collection_name": collection_name}
+        new_collection = crud.create_record(db=db, model=Collection, **collection_data)
+        return {column.name: getattr(new_collection, column.name) for column in new_collection.__table__.columns}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating collection: {e}")
 
 @app.post("/collections/{collection_id}/add_result")
-def add_result_to_collection(collection_id: int, data: AddResultToCollection, db: Session = Depends(get_db)):
-    collection = db.query(models.Collection).filter(models.Collection.collection_id == collection_id).first()
-    if not collection:
-        raise HTTPException(status_code=404, detail="Collection not found")
+def add_result_to_collection(collection_id: int, result_id: int, db: Session = Depends(get_db)):
+    try:
+        collection_result_data = {"collection_id": collection_id, "result_id": result_id}
+        new_collection_result = crud.create_record(db=db, model=CollectionResult, **collection_result_data)
+        return {column.name: getattr(new_collection_result, column.name) for column in new_collection_result.__table__.columns}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error adding result to collection: {e}")
 
-    # 결과 ID 업데이트
-    collection.result_id = data.result_id
-    db.commit()
-    db.refresh(collection)
-
-    return {"message": "Result added to collection successfully"}
-
-
-@app.get("/user_collections/", response_model=List[schemas.Collection])
+@app.get("/user_collections/")
 def get_user_collections(request: Request, db: Session = Depends(get_db)):
     user_info = request.session.get('user_info')
     if not user_info:
         raise HTTPException(status_code=401, detail="User not authenticated")
 
-    user_id = user_info['user_id']
-    collections = db.query(models.Collection).filter(models.Collection.user_id == user_id).all()
+    try:
+        user_id = user_info['user_id']
+        collections = db.query(Collection).filter(Collection.user_id == user_id).all()
 
-    if not collections:
-        return [{"message": "컬렉션이 비었습니다"}]
+        if not collections:
+            return [{"message": "컬렉션이 비었습니다"}]
 
-    collections_data = []
-    for collection in collections:
-        collections_data.append({
-            "collection_id": collection.collection_id,
-            "created_at": collection.created_at,
-            "user_id": collection.user_id,
-            "result_id": collection.result_id,
-            "prompt_id": collection.prompt_id,
-        })
+        collections_data = []
+        for collection in collections:
+            collection_dict = {column.name: getattr(collection, column.name) for column in collection.__table__.columns}
+            collections_data.append(collection_dict)
 
-    return collections_data
+        return collections_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching user collections: {e}")
 
 if __name__ == "__main__":
     import uvicorn

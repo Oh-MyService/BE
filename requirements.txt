@@ -5,3 +5,7 @@ sqlalchemy
 python-dotenv
 redis
 itsdangerous
+httpx
+python-multipart
+aiofiles
+jinja2

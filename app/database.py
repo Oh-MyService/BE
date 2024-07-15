@@ -1,17 +1,26 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.engine.url import URL
+import os
+from dotenv import load_dotenv
 
-# MySQL 데이터베이스 연결 URL 설정
-SQLALCHEMY_DATABASE_URL = "mysql+pymysql://root:root@43.202.57.225:21212/my_database"
+# .env 파일에서 환경 변수 로드
+load_dotenv()
 
-# SQLAlchemy 엔진 생성
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
+# .env 파일에서 DATABASE_URL 읽기
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# 세션 생성을 위한 세션팩토리 생성
-# 수정 필요
+# 데이터베이스 엔진 생성
+engine = create_engine(DATABASE_URL)
+# 세션 로컬 설정
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Base 클래스 설정
+# Base 클래스 생성
 Base = declarative_base()
+
+# 데이터베이스 세션 생성 함수
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

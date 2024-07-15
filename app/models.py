@@ -1,61 +1,28 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
-from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.mysql import LONGBLOB
-from app.database import Base
+from sqlalchemy.ext.automap import automap_base
+from sqlalchemy.orm import relationship, Session
+from sqlalchemy import create_engine
+import os
+from dotenv import load_dotenv
 
-### User 모델 ###
-class User(Base):
-    __tablename__ = "users"
+# .env 파일에서 환경 변수 로드
+load_dotenv()
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False)  # Added length
-    email = Column(String(255), nullable=False, unique=True)  # Added length
-    profileimg = Column(String(255))  # Added length
+# .env 파일에서 DATABASE_URL 읽기
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-    prompts = relationship("Prompt", back_populates="user")
-    results = relationship("Result", back_populates="user")
-    collections = relationship("Collection", back_populates="user")
+# DATABASE_URL 출력하여 확인
+print(f"DATABASE_URL: {DATABASE_URL}")
 
-### Prompt 모델 ###
-class Prompt(Base):
-    __tablename__ = "prompts"
+# 데이터베이스 엔진 생성
+engine = create_engine(DATABASE_URL, echo=True)
+Base = automap_base()
 
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime, nullable=False)
-    content = Column(String(255), nullable=False)  # Added length
-    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+# 테이블 구조 반영
+Base.prepare(engine, reflect=True)
 
-    user = relationship("User", back_populates="prompts")
-    results = relationship("Result", back_populates="prompt")
-    collections = relationship("Collection", back_populates="prompt")
-
-### Result 모델 ###
-class Result(Base):
-    __tablename__ = "results"
-
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime, nullable=False)
-    image_data = Column(LONGBLOB, nullable=False)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    prompt_id = Column(Integer, ForeignKey('prompts.id', ondelete='CASCADE'), nullable=False)
-
-    user = relationship("User", back_populates="results")
-    prompt = relationship("Prompt", back_populates="results")
-    collections = relationship("Collection", back_populates="result")
-
-### Collection 모델 ###
-class Collection(Base):
-    __tablename__ = "collections"
-
-    collection_id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime, nullable=True)
-   # user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
-    #result_id = Column(Integer, ForeignKey('results.id', ondelete='CASCADE'), nullable=False)
-    result_id = Column(Integer, ForeignKey('results.id', ondelete='CASCADE'), nullable=True)
-    #prompt_id = Column(Integer, ForeignKey('prompts.id', ondelete='CASCADE'), nullable=False)
-    prompt_id = Column(Integer, ForeignKey('prompts.id', ondelete='CASCADE'), nullable=True)
-    user = relationship("User", back_populates="collections")
-    result = relationship("Result", back_populates="collections")
-    prompt = relationship("Prompt", back_populates="collections")
-    
+# 자동으로 생성된 클래스들 가져오기
+User = Base.classes.users
+Prompt = Base.classes.prompts
+Result = Base.classes.results
+Collection = Base.classes.collections
+CollectionResult = Base.classes.collection_results
