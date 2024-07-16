@@ -35,7 +35,8 @@ app.add_middleware(SessionMiddleware,
     session_cookie="session", 
     max_age=3600, 
     same_site="Lax", 
-    https_only=False
+    https_only=False, 
+    domain="43.202.57.225"
 )
 
 
