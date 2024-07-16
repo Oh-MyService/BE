@@ -40,10 +40,6 @@ AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 USER_INFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
 
-# 현재 디렉토리 설정
-current_dir = os.path.dirname(os.path.abspath(__file__))
-login_complete_file = os.path.join(current_dir, "login_complete.html")
-
 @app.get("/login")
 async def login():
     try:
@@ -98,13 +94,6 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error during authentication: {e}")
-
-@app.get("/login-complete")
-async def login_complete():
-    try:
-        return FileResponse(login_complete_file)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error loading login complete file: {e}")
 
 @app.get("/user_info")
 async def get_user_info(request: Request):
