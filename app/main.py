@@ -88,6 +88,8 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
 
             # 세션에 사용자 정보 저장
             request.session['user_info'] = {"user_id": db_user.id, "email": email, "name": name, "picture": picture}
+            print(f"세션에 저장된 사용자 정보: {request.session['user_info']}")  # 세션에 저장된 정보 출력
+
 
             return RedirectResponse(url="http://43.202.57.225:29292/login-complete")
     except HTTPException as e:
