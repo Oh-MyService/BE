@@ -39,9 +39,9 @@ app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY")
 CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://inkyong.com/auth")
-AUTHORIZATION_URL = "http://accounts.google.com/o/oauth2/auth"  # HTTPS -> HTTP
-TOKEN_URL = "http://oauth2.googleapis.com/token"  # HTTPS -> HTTP
-USER_INFO_URL = "http://www.googleapis.com/oauth2/v1/userinfo"  # HTTPS -> HTTP
+AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/auth"  
+TOKEN_URL = "https://oauth2.googleapis.com/token"
+USER_INFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"  
 
 # 현재 디렉토리 설정
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -49,7 +49,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 @app.get("/login")
 async def login():
     try:
-        return RedirectResponse(
+        return RedirectResponse(    
             f"{AUTHORIZATION_URL}?response_type=code&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=openid%20email%20profile"
         )
     except Exception as e:
