@@ -1,10 +1,10 @@
 from fastapi import FastAPI, Depends, HTTPException, Request, Form, UploadFile, File
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.responses import RedirectResponse, FileResponse, JSONResponse
+from starlette.responses import RedirectResponse, JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
 import httpx
-from typing import List, Optional
+from typing import List
 from dotenv import load_dotenv
 import base64
 import os
@@ -29,21 +29,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 세션 미들웨어 설정 (쿠키 도메인 설정 추가)
+# 세션 미들웨어 설정
 app.add_middleware(SessionMiddleware, 
-    secret_key=os.getenv("SESSION_SECRET_KEY"), 
-    session_cookie="session", 
-    max_age=3600, 
-    same_site="Lax", 
-    https_only=False, 
-    domain="43.202.57.225"
+    secret_key=os.getenv("SESSION_SECRET_KEY"),
+    session_cookie="session",
+    max_age=3600,
+    same_site="Lax",
+    https_only=False
 )
-
 
 # .env 파일에서 Google OAuth 환경 변수 읽기
 CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://inkyong.com/auth")
+REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://43.202.57.225:29292/auth")
 AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 USER_INFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
@@ -98,7 +96,6 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
             request.session['user_info'] = {"user_id": db_user.id, "email": email, "name": name, "picture": picture}
             print(f"세션에 저장된 사용자 정보: {request.session['user_info']}")  # 세션에 저장된 정보 출력
 
-
             return RedirectResponse(url="http://43.202.57.225:29292/login-complete")
     except HTTPException as e:
         raise e
@@ -108,7 +105,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
 @app.get("/user_info")
 async def get_user_info(request: Request):
     user_info = request.session.get('user_info')
-    print(f"세션에서 가져온 사용자 정보: {user_info}")
+    print(f"세션에서 가져온 사용자 정보: {user_info}")  # 세션에서 가져온 정보 출력
     if user_info:
         return JSONResponse(content=user_info)
     else:
