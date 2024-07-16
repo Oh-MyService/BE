@@ -18,9 +18,6 @@ from .utils import sqlalchemy_to_pydantic
 # .env 파일에서 환경 변수 로드
 load_dotenv()
 
-# DATABASE_URL 출력하여 확인
-print(f"DATABASE_URL: {os.getenv('DATABASE_URL')}")
-
 app = FastAPI()
 
 # CORS 설정
@@ -39,17 +36,18 @@ app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY")
 CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://inkyong.com/auth")
-AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/auth"  
+AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
-USER_INFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"  
+USER_INFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
 
 # 현재 디렉토리 설정
 current_dir = os.path.dirname(os.path.abspath(__file__))
+login_complete_file = os.path.join(current_dir, "login_complete.html")
 
 @app.get("/login")
 async def login():
     try:
-        return RedirectResponse(    
+        return RedirectResponse(
             f"{AUTHORIZATION_URL}?response_type=code&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=openid%20email%20profile"
         )
     except Exception as e:
@@ -100,6 +98,13 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error during authentication: {e}")
+
+@app.get("/login-complete")
+async def login_complete():
+    try:
+        return FileResponse(login_complete_file)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading login complete file: {e}")
 
 @app.get("/user_info")
 async def get_user_info(request: Request):
@@ -152,12 +157,12 @@ def get_all_results(request: Request, db: Session = Depends(get_db)):
         user_id = user_info['user_id']
         results = db.query(Result).filter(Result.user_id == user_id).all()
         results_data = []
-        
+
         for result in results:
             result_dict = {column.name: getattr(result, column.name) for column in result.__table__.columns}
             result_dict["image_data"] = base64.b64encode(result_dict["image_data"]).decode('utf-8')
             results_data.append(result_dict)
-        
+
         return results_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching results: {e}")
