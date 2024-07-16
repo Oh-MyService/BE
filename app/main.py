@@ -29,8 +29,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 세션 미들웨어 설정
-app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY"))
+# 세션 미들웨어 설정 (쿠키 도메인 설정 추가)
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY"), session_cookie="session", max_age=3600, same_site="Lax", https_only=False)
 
 # .env 파일에서 Google OAuth 환경 변수 읽기
 CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
