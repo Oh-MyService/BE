@@ -50,13 +50,15 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 index_file = os.path.join(current_dir, "index.html")
 login_complete_file = os.path.join(current_dir, "login_complete.html")
 
+"""
 @app.get("/")
 async def read_root():
     try:
         return FileResponse(index_file)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error loading index file: {e}")
-
+"""
+        
 @app.get("/login")
 async def login():
     try:
@@ -112,13 +114,15 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error during authentication: {e}")
 
+"""
 @app.get("/login-complete")
 async def login_complete():
     try:
         return FileResponse(login_complete_file)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error loading login complete file: {e}")
-
+"""
+        
 @app.get("/user_info")
 async def get_user_info(request: Request):
     user_info = request.session.get('user_info')
@@ -180,12 +184,14 @@ def get_all_results(request: Request, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching results: {e}")
 
+"""
 @app.get("/my-page")
 async def my_page():
     try:
         return FileResponse(os.path.join(current_dir, "my_page.html"))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error loading my page: {e}")
+"""
 
 @app.get("/user_results/")
 def get_user_results(request: Request, db: Session = Depends(get_db)):
