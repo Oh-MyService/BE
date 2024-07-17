@@ -104,6 +104,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
 
 @app.get("/api/user_info")
 async def get_user_info(request: Request):
+    print(f"세션이 존재하나요?: {bool(request.session)}")
     user_info = request.session.get('user_info')
     print(f"세션에서 가져온 사용자 정보: {user_info}")  # 세션에서 가져온 정보 출력
     if user_info:
