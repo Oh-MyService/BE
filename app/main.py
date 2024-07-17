@@ -109,13 +109,14 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
                 user_data = {"email": email, "name": name, "profileimg": picture}
                 db_user = crud.create_record(db=db, model=User, **user_data)
 
-            # 세션에 사용자 정보 저장
-            request.session['user_info'] = {"user_id": db_user.id, "email": email, "name": name, "picture": picture}
-            logging.debug(f"세션에 저장된 사용자 정보: {request.session['user_info']}")  # 세션에 저장된 정보 출력
+            # 세션에 사용자 정보 저장 (JSON 문자열로 저장)
+            user_info_str = json.dumps({"user_id": db_user.id, "email": email, "name": name, "picture": picture}, ensure_ascii=False)
+            request.session['user_info'] = user_info_str
+            logging.debug(f"세션에 저장된 사용자 정보: {user_info_str}")  # 세션에 저장된 정보 출력
 
             # 세션이 제대로 설정되었는지 확인하기 위한 디버깅
             response = RedirectResponse(url="http://43.202.57.225:29292/login-complete")
-            response.set_cookie(key="session", value=request.session['user_info'], httponly=True, samesite="None", secure=False)
+            response.set_cookie(key="session", value=user_info_str, httponly=True, samesite="None", secure=False)
             return response
     except HTTPException as e:
         logging.error(f"HTTP Exception during authentication: {e}")
@@ -127,12 +128,16 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
 @app.get("/api/user_info")
 async def get_user_info(request: Request):
     logging.debug(f"세션이 존재하나요?: {bool(request.session)}")
-    user_info = request.session.get('user_info')
-    logging.debug(f"세션에서 가져온 사용자 정보: {user_info}")  # 세션에서 가져온 정보 출력
-    if user_info:
+    user_info_str = request.session.get('user_info')
+    logging.debug(f"세션에서 가져온 사용자 정보: {user_info_str}")  # 세션에서 가져온 정보 출력
+    if user_info_str:
+        user_info = json.loads(user_info_str)
         return JSONResponse(content=user_info)
     else:
         raise HTTPException(status_code=401, detail="User not authenticated")
+
+# 나머지 엔드포인트는 동일하게 유지
+
 
 @app.post("/api/prompts/")
 def create_prompt(prompt_data: dict, db: Session = Depends(get_db)):
