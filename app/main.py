@@ -46,7 +46,7 @@ AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 USER_INFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
 
-@app.get("/login")
+@app.get("/api/login")
 async def login():
     try:
         return RedirectResponse(
@@ -55,7 +55,7 @@ async def login():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error during login: {e}")
 
-@app.get("/auth")
+@app.get("/api/auth")
 async def auth(request: Request, code: str, db: Session = Depends(get_db)):
     try:
         async with httpx.AsyncClient() as client:
@@ -102,7 +102,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error during authentication: {e}")
 
-@app.get("/user_info")
+@app.get("/api/user_info")
 async def get_user_info(request: Request):
     user_info = request.session.get('user_info')
     print(f"세션에서 가져온 사용자 정보: {user_info}")  # 세션에서 가져온 정보 출력
@@ -111,7 +111,7 @@ async def get_user_info(request: Request):
     else:
         raise HTTPException(status_code=401, detail="User not authenticated")
 
-@app.post("/prompts/")
+@app.post("/api/prompts/")
 def create_prompt(prompt_data: dict, db: Session = Depends(get_db)):
     try:
         prompt_data['created_at'] = datetime.now()
@@ -119,7 +119,7 @@ def create_prompt(prompt_data: dict, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating prompt: {e}")
 
-@app.get("/prompts/{prompt_id}")
+@app.get("/api/prompts/{prompt_id}")
 def read_prompt(prompt_id: int, db: Session = Depends(get_db)):
     try:
         db_prompt = crud.get_record(db, Prompt, prompt_id)
@@ -132,7 +132,7 @@ def read_prompt(prompt_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error reading prompt: {e}")
 
-@app.post("/results/")
+@app.post("/api/results/")
 async def create_result(prompt_id: int = Form(...), user_id: int = Form(...), image: UploadFile = File(...), db: Session = Depends(get_db)):
     try:
         image_data = await image.read()
@@ -144,7 +144,7 @@ async def create_result(prompt_id: int = Form(...), user_id: int = Form(...), im
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating result: {e}")
 
-@app.get("/results/")
+@app.get("/api/results/")
 def get_all_results(request: Request, db: Session = Depends(get_db)):
     user_info = request.session.get('user_info')
     if not user_info:
@@ -164,7 +164,7 @@ def get_all_results(request: Request, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching results: {e}")
 
-@app.get("/user_results/")
+@app.get("/api/user_results/")
 def get_user_results(request: Request, db: Session = Depends(get_db)):
     user_info = request.session.get('user_info')
     if not user_info:
@@ -196,7 +196,7 @@ def get_user_results(request: Request, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching user results and collections: {e}")
 
-@app.post("/collections/")
+@app.post("/api/collections/")
 def create_collection(collection_name: str = Form(...), user_id: int = Form(...), db: Session = Depends(get_db)):
     try:
         collection_data = {"created_at": datetime.now(), "user_id": user_id, "collection_name": collection_name}
@@ -205,7 +205,7 @@ def create_collection(collection_name: str = Form(...), user_id: int = Form(...)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating collection: {e}")
 
-@app.post("/collections/{collection_id}/add_result")
+@app.post("/api/collections/{collection_id}/add_result")
 def add_result_to_collection(collection_id: int, result_id: int, db: Session = Depends(get_db)):
     try:
         collection_result_data = {"collection_id": collection_id, "result_id": result_id}
@@ -214,7 +214,7 @@ def add_result_to_collection(collection_id: int, result_id: int, db: Session = D
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error adding result to collection: {e}")
 
-@app.get("/user_collections/")
+@app.get("/api/user_collections/")
 def get_user_collections(request: Request, db: Session = Depends(get_db)):
     user_info = request.session.get('user_info')
     if not user_info:
