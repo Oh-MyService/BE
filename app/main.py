@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 import base64
 import os
 from datetime import datetime
+import logging
 
 from . import crud
 from .database import get_db
@@ -17,6 +18,9 @@ from .utils import sqlalchemy_to_pydantic
 
 # .env 파일에서 환경 변수 로드
 load_dotenv()
+
+# 로깅 설정
+logging.basicConfig(level=logging.DEBUG)
 
 app = FastAPI()
 
@@ -99,23 +103,23 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
 
             # 세션에 사용자 정보 저장
             request.session['user_info'] = {"user_id": db_user.id, "email": email, "name": name, "picture": picture}
-            print(f"세션에 저장된 사용자 정보: {request.session['user_info']}")  # 세션에 저장된 정보 출력
+            logging.debug(f"세션에 저장된 사용자 정보: {request.session['user_info']}")  # 세션에 저장된 정보 출력
 
             # 쿠키 설정 로그 추가
-            for cookie in request.cookies:
-                print(f"설정된 쿠키: {cookie}")
+            logging.debug(f"설정된 쿠키: {request.cookies}")
 
             return RedirectResponse(url="http://43.202.57.225:29292/login-complete")
     except HTTPException as e:
         raise e
     except Exception as e:
+        logging.error(f"Error during authentication: {e}")
         raise HTTPException(status_code=500, detail=f"Error during authentication: {e}")
 
 @app.get("/api/user_info")
 async def get_user_info(request: Request):
-    print(f"세션이 존재하나요?: {bool(request.session)}")
+    logging.debug(f"세션이 존재하나요?: {bool(request.session)}")
     user_info = request.session.get('user_info')
-    print(f"세션에서 가져온 사용자 정보: {user_info}")  # 세션에서 가져온 정보 출력
+    logging.debug(f"세션에서 가져온 사용자 정보: {user_info}")  # 세션에서 가져온 정보 출력
     if user_info:
         return JSONResponse(content=user_info)
     else:
