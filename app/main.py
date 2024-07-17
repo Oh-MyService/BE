@@ -34,7 +34,7 @@ app.add_middleware(SessionMiddleware,
     secret_key=os.getenv("SESSION_SECRET_KEY"),
     session_cookie="session",
     max_age=3600,
-    same_site="Lax",
+    same_site="None",
     https_only=False  # HTTP 환경에서는 False로 설정
 )
 
