@@ -117,7 +117,9 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
             # 쿠키 설정 로그 추가
             logging.debug(f"설정된 쿠키: {request.cookies}")
 
+            # 세션이 제대로 설정되었는지 확인하기 위한 디버깅
             response = RedirectResponse(url="http://43.202.57.225:29292/login-complete")
+            response.set_cookie(key="session", value=request.session['user_info'], httponly=True, samesite="None", secure=False)
             return response
     except HTTPException as e:
         logging.error(f"HTTP Exception during authentication: {e}")
@@ -125,6 +127,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
     except Exception as e:
         logging.error(f"Error during authentication: {e}")
         raise HTTPException(status_code=500, detail=f"Error during authentication: {e}")
+
 
 @app.get("/api/user_info")
 async def get_user_info(request: Request):
