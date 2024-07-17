@@ -1,4 +1,3 @@
-import json
 from fastapi import FastAPI, Depends, HTTPException, Request, Form, UploadFile, File
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +9,7 @@ from dotenv import load_dotenv
 import base64
 import os
 from datetime import datetime
+import json
 import logging
 
 from . import crud
@@ -29,7 +29,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://43.202.57.225:29292",  # 허용할 도메인을 정확하게 기입
+        "http://43.202.57.225:29292",
         "http://43.202.57.225:25252",
         "http://inkyong.com",
         "https://inkyong.com"
@@ -110,12 +110,8 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
                 db_user = crud.create_record(db=db, model=User, **user_data)
 
             # 세션에 사용자 정보 저장
-            user_info_json = json.dumps({"user_id": db_user.id, "email": email, "name": name, "picture": picture})
-            request.session['user_info'] = user_info_json
+            request.session['user_info'] = {"user_id": db_user.id, "email": email, "name": name, "picture": picture}
             logging.debug(f"세션에 저장된 사용자 정보: {request.session['user_info']}")  # 세션에 저장된 정보 출력
-
-            # 쿠키 설정 로그 추가
-            logging.debug(f"설정된 쿠키: {request.cookies}")
 
             # 세션이 제대로 설정되었는지 확인하기 위한 디버깅
             response = RedirectResponse(url="http://43.202.57.225:29292/login-complete")
@@ -128,20 +124,15 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
         logging.error(f"Error during authentication: {e}")
         raise HTTPException(status_code=500, detail=f"Error during authentication: {e}")
 
-
 @app.get("/api/user_info")
 async def get_user_info(request: Request):
     logging.debug(f"세션이 존재하나요?: {bool(request.session)}")
-    user_info_json = request.session.get('user_info')
-    logging.debug(f"세션에서 가져온 사용자 정보: {user_info_json}")  # 세션에서 가져온 정보 출력
-    if user_info_json:
-        user_info = json.loads(user_info_json)
+    user_info = request.session.get('user_info')
+    logging.debug(f"세션에서 가져온 사용자 정보: {user_info}")  # 세션에서 가져온 정보 출력
+    if user_info:
         return JSONResponse(content=user_info)
     else:
         raise HTTPException(status_code=401, detail="User not authenticated")
-
-# 나머지 엔드포인트는 동일하게 유지
-
 
 @app.post("/api/prompts/")
 def create_prompt(prompt_data: dict, db: Session = Depends(get_db)):
