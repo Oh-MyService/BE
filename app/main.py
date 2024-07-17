@@ -1,3 +1,4 @@
+import json
 from fastapi import FastAPI, Depends, HTTPException, Request, Form, UploadFile, File
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
@@ -62,11 +63,13 @@ async def login():
             f"{AUTHORIZATION_URL}?response_type=code&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=openid%20email%20profile"
         )
     except Exception as e:
+        logging.error(f"Error during login: {e}")
         raise HTTPException(status_code=500, detail=f"Error during login: {e}")
 
 @app.get("/auth")
 async def auth(request: Request, code: str, db: Session = Depends(get_db)):
     try:
+        logging.debug("Received code: %s", code)
         async with httpx.AsyncClient() as client:
             token_response = await client.post(
                 TOKEN_URL,
@@ -78,18 +81,23 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
                     "grant_type": "authorization_code",
                 },
             )
+            logging.debug("Token response status: %s", token_response.status_code)
             token_response.raise_for_status()
             token_response_data = token_response.json()
+            logging.debug("Token response data: %s", token_response_data)
             access_token = token_response_data.get("access_token")
             if not access_token:
+                logging.error("Invalid client credentials")
                 raise HTTPException(status_code=401, detail="Invalid client credentials")
 
             user_info_response = await client.get(
                 USER_INFO_URL,
                 headers={"Authorization": f"Bearer {access_token}"},
             )
+            logging.debug("User info response status: %s", user_info_response.status_code)
             user_info_response.raise_for_status()
             user_info = user_info_response.json()
+            logging.debug("User info data: %s", user_info)
             email = user_info.get("email")
             name = user_info.get("name")
             picture = user_info.get("picture")
@@ -102,16 +110,17 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
                 db_user = crud.create_record(db=db, model=User, **user_data)
 
             # 세션에 사용자 정보 저장
-            request.session['user_info'] = {"user_id": db_user.id, "email": email, "name": name, "picture": picture}
+            user_info_json = json.dumps({"user_id": db_user.id, "email": email, "name": name, "picture": picture})
+            request.session['user_info'] = user_info_json
             logging.debug(f"세션에 저장된 사용자 정보: {request.session['user_info']}")  # 세션에 저장된 정보 출력
 
             # 쿠키 설정 로그 추가
             logging.debug(f"설정된 쿠키: {request.cookies}")
 
             response = RedirectResponse(url="http://43.202.57.225:29292/login-complete")
-            response.set_cookie(key="session", value=request.session['user_info'], httponly=True, samesite="None", secure=False)
             return response
     except HTTPException as e:
+        logging.error(f"HTTP Exception during authentication: {e}")
         raise e
     except Exception as e:
         logging.error(f"Error during authentication: {e}")
@@ -120,12 +129,16 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
 @app.get("/api/user_info")
 async def get_user_info(request: Request):
     logging.debug(f"세션이 존재하나요?: {bool(request.session)}")
-    user_info = request.session.get('user_info')
-    logging.debug(f"세션에서 가져온 사용자 정보: {user_info}")  # 세션에서 가져온 정보 출력
-    if user_info:
+    user_info_json = request.session.get('user_info')
+    logging.debug(f"세션에서 가져온 사용자 정보: {user_info_json}")  # 세션에서 가져온 정보 출력
+    if user_info_json:
+        user_info = json.loads(user_info_json)
         return JSONResponse(content=user_info)
     else:
         raise HTTPException(status_code=401, detail="User not authenticated")
+
+# 나머지 엔드포인트는 동일하게 유지
+
 
 @app.post("/api/prompts/")
 def create_prompt(prompt_data: dict, db: Session = Depends(get_db)):
