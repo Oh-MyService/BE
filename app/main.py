@@ -110,7 +110,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
                 db_user = crud.create_record(db=db, model=User, **user_data)
 
             # 세션에 사용자 정보 저장 (JSON 문자열로 저장)
-            user_info_str = json.dumps({"user_id": db_user.id, "email": email, "name": name, "picture": picture}, ensure_ascii=False).encode('utf-8')
+            user_info_str = json.dumps({"user_id": db_user.id, "email": email, "name": name, "picture": picture}, ensure_ascii=False)
             request.session['user_info'] = user_info_str
             logging.debug(f"세션에 저장된 사용자 정보: {user_info_str}")  # 세션에 저장된 정보 출력
 
@@ -130,7 +130,7 @@ async def get_user_info(request: Request):
     user_info_str = request.session.get('user_info')
     logging.debug(f"세션에서 가져온 사용자 정보: {user_info_str}")  # 세션에서 가져온 정보 출력
     if user_info_str:
-        user_info = json.loads(user_info_str.decode('utf-8'))
+        user_info = json.loads(user_info_str)
         return JSONResponse(content=user_info)
     else:
         raise HTTPException(status_code=401, detail="User not authenticated")
