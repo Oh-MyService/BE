@@ -46,7 +46,7 @@ AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 USER_INFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
 
-@app.get("/login")
+@app.get("/api/login")
 async def login():
     try:
         return RedirectResponse(
