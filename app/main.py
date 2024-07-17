@@ -108,7 +108,9 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
             # 쿠키 설정 로그 추가
             logging.debug(f"설정된 쿠키: {request.cookies}")
 
-            return RedirectResponse(url="http://43.202.57.225:29292/login-complete")
+            response = RedirectResponse(url="http://43.202.57.225:29292/login-complete")
+            response.set_cookie(key="session", value=request.session['user_info'], httponly=True, samesite="None", secure=False)
+            return response
     except HTTPException as e:
         raise e
     except Exception as e:
