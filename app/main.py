@@ -35,13 +35,13 @@ app.add_middleware(SessionMiddleware,
     session_cookie="session",
     max_age=3600,
     same_site="Lax",
-    https_only=False
+    https_only=False  # HTTP 환경에서는 False로 설정
 )
 
 # .env 파일에서 Google OAuth 환경 변수 읽기
 CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://inkyong.com/auth")
+REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://43.202.57.225:29292/auth")
 AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 USER_INFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
@@ -104,7 +104,6 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
 
 @app.get("/user_info")
 async def get_user_info(request: Request):
-    print(f"세션이 있긴 할까요?: {bool(request.session)}")
     user_info = request.session.get('user_info')
     print(f"세션에서 가져온 사용자 정보: {user_info}")  # 세션에서 가져온 정보 출력
     if user_info:
