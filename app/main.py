@@ -46,7 +46,7 @@ AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 USER_INFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
 
-@app.get("/api/login")
+@app.get("/login")
 async def login():
     try:
         return RedirectResponse(
@@ -55,7 +55,7 @@ async def login():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error during login: {e}")
 
-@app.get("/api/auth")
+@app.get("/auth")
 async def auth(request: Request, code: str, db: Session = Depends(get_db)):
     try:
         async with httpx.AsyncClient() as client:
