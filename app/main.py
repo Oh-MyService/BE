@@ -23,7 +23,12 @@ app = FastAPI()
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://43.202.57.225:29292", "http://43.202.57.225:25252", "http://inkyong.com", "https://inkyong.com"],
+    allow_origins=[
+        "http://43.202.57.225:29292",  # 허용할 도메인을 정확하게 기입
+        "http://43.202.57.225:25252",
+        "http://inkyong.com",
+        "https://inkyong.com"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -95,6 +100,10 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
             # 세션에 사용자 정보 저장
             request.session['user_info'] = {"user_id": db_user.id, "email": email, "name": name, "picture": picture}
             print(f"세션에 저장된 사용자 정보: {request.session['user_info']}")  # 세션에 저장된 정보 출력
+
+            # 쿠키 설정 로그 추가
+            for cookie in request.cookies:
+                print(f"설정된 쿠키: {cookie}")
 
             return RedirectResponse(url="http://43.202.57.225:29292/login-complete")
     except HTTPException as e:
