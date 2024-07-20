@@ -148,7 +148,7 @@ def create_prompt(prompt_data: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error creating prompt: {e}")
 
 # 해당 유저 id의 프롬프트 전체 불러오기
-@app.get("/get/prompts/user/{user_id}")
+@app.get("/api/prompts/user/{user_id}")
 def get_user_prompts(user_id: int, db: Session = Depends(get_db)):
     try:
         prompts = db.query(Prompt).filter(Prompt.user_id == user_id).all()
@@ -157,7 +157,7 @@ def get_user_prompts(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error fetching user prompts: {e}")
 
 # 해당 프롬프트 id의 프롬프트 전체 불러오기
-@app.get("/get/prompts/{prompt_id}")
+@app.get("/api/prompts/{prompt_id}")
 def get_prompt(prompt_id: int, db: Session = Depends(get_db)):
     try:
         prompt = db.query(Prompt).filter(Prompt.id == prompt_id).first()
@@ -182,7 +182,7 @@ async def create_result(prompt_id: int = Form(...), user_id: int = Form(...), im
         raise HTTPException(status_code=500, detail=f"Error creating result: {e}")
 
 # 해당 프롬프트 id의 결과 이미지 전체 불러오기
-@app.get("/get/results/{prompt_id}")
+@app.get("/api/results/{prompt_id}")
 def get_prompt_results(prompt_id: int, db: Session = Depends(get_db)):
     try:
         results = db.query(Result).filter(Result.prompt_id == prompt_id).all()
@@ -193,7 +193,7 @@ def get_prompt_results(prompt_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error fetching prompt results: {e}")
 
 # 해당 유저 id의 결과 이미지 전체 불러오기    
-@app.get("/get/results/user/{user_id}")
+@app.get("/api/results/user/{user_id}")
 def get_user_results(user_id: int, db: Session = Depends(get_db)):
     try:
         results = db.query(Result).filter(Result.user_id == user_id).all()
