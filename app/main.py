@@ -167,6 +167,7 @@ def get_prompt(prompt_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching prompt: {e}")
 
+### results ###
 # 결과 이미지 업로드    
 @app.post("/api/results/")
 async def create_result(prompt_id: int = Form(...), user_id: int = Form(...), image: UploadFile = File(...), db: Session = Depends(get_db)):
