@@ -16,15 +16,15 @@ from .database import get_db
 from .models import User, Prompt, Result, Collection, CollectionResult
 from .utils import sqlalchemy_to_pydantic, create_access_token, decode_access_token
 
-# .env 파일에서 환경 변수 로드
+# Load environment variables
 load_dotenv()
 
-# 로깅 설정
+# Set up logging
 logging.basicConfig(level=logging.DEBUG)
 
 app = FastAPI()
 
-# CORS 설정
+# CORS settings
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://43.202.57.225:29292", "http://43.202.57.225:25252", "http://inkyong.com", "https://inkyong.com"],
@@ -33,7 +33,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# .env 파일에서 Google OAuth 환경 변수 읽기
+# Read Google OAuth environment variables
 CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://inkyong.com/auth")
@@ -41,12 +41,11 @@ AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 USER_INFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
 
-def get_current_user(request: Request, db: Session = Depends(get_db)):
-    token = request.cookies.get('access_token')
-    if not token:
+def get_current_user(access_token: str = Cookie(None), db: Session = Depends(get_db)):
+    if not access_token:
         logging.error("No token found in cookies")
         raise HTTPException(status_code=401, detail="Not authenticated")
-    token = token.split("Bearer ")[1]  # 'Bearer ' 문자열 제거
+    token = access_token.split("Bearer ")[1]  # 'Bearer ' 문자열 제거
     payload = decode_access_token(token)
     if payload is None:
         logging.error("Invalid or expired token")
@@ -131,33 +130,25 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
         logging.error(f"Error during authentication: {e}")
         raise HTTPException(status_code=500, detail=f"Error during authentication: {e}")
     
-@app.get("/api/user_info")
+@app.post("/api/user_info")
 async def user_info(access_token: str = Cookie(None), db: Session = Depends(get_db)):
-    logging.debug("Received cookie: %s", access_token)
-    
+    logging.debug("Received access_token: %s", access_token)
     if not access_token:
         logging.error("No access token found in cookies")
         raise HTTPException(status_code=401, detail="Not authenticated")
-    
     if access_token.startswith("Bearer "):
         access_token = access_token[len("Bearer "):]
-    
     payload = decode_access_token(access_token)
-    
     if payload is None:
         logging.error("Invalid or expired token")
         raise HTTPException(status_code=401, detail="Invalid or expired token")
-    
     user_id = payload.get("user_id")
     user = db.query(User).filter(User.id == user_id).first()
-    
     if user is None:
         logging.error("User not found or token invalid")
         raise HTTPException(status_code=401, detail="Invalid or expired token")
-    
     logging.debug(f"Returning user info: {user.email}")
     return {"user_id": user.id, "email": user.email, "name": user.name}
-
 @app.post("/api/prompts/")
 def create_prompt(prompt_data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
@@ -166,7 +157,7 @@ def create_prompt(prompt_data: dict, db: Session = Depends(get_db), current_user
         return crud.create_record(db=db, model=Prompt, **prompt_data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating prompt: {e}")
-# main.py
+
 
 @app.get("/api/prompts/user/{user_id}")
 def get_user_prompts(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
