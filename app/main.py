@@ -1,9 +1,7 @@
-from fastapi import FastAPI, Depends, HTTPException, Request, Form, UploadFile, File, Header, Security
+from fastapi import FastAPI, Depends, HTTPException, Request, Form, UploadFile, File
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordBearer
 from starlette.responses import RedirectResponse, JSONResponse
-from starlette.middleware.sessions import SessionMiddleware
 import httpx
 from typing import List
 from dotenv import load_dotenv
@@ -42,18 +40,6 @@ REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://inkyong.com/auth")
 AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 USER_INFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-def get_current_user(token: str = Security(oauth2_scheme), db: Session = Depends(get_db)):
-    payload = decode_access_token(token)
-    if payload is None:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-    user_id = payload.get("user_id")
-    user = db.query(User).filter(User.id == user_id).first()
-    if user is None:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-    return user
 
 @app.get("/api/login")
 async def login():
@@ -117,6 +103,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
             response = RedirectResponse(url="http://43.202.57.225:29292/login-complete")
             response.set_cookie(key="access_token", value=f"Bearer {access_token}", httponly=True)
             return response
+
     except HTTPException as e:
         logging.error(f"HTTP Exception during authentication: {e}")
         raise e
@@ -125,13 +112,23 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error during authentication: {e}")
 
 @app.get("/api/user_info")
-async def get_user_info(current_user: User = Depends(get_current_user)):
-    return JSONResponse(content={
-        "user_id": current_user.id,
-        "email": current_user.email,
-        "name": current_user.name,
-        "picture": current_user.profileimg,
-    })
+async def get_user_info(request: Request):
+    try:
+        token = request.cookies.get('access_token')
+        if not token:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        payload = decode_access_token(token)
+        if payload is None:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        user_id = payload.get("user_id")
+        email = payload.get("email")
+        return JSONResponse(content={"user_id": user_id, "email": email})
+    except HTTPException as e:
+        logging.error(f"HTTP Exception during getting user info: {e}")
+        raise e
+    except Exception as e:
+        logging.error(f"Error during getting user info: {e}")
+        raise HTTPException(status_code=500, detail=f"Error during getting user info: {e}")
 
 @app.post("/api/prompts/")
 def create_prompt(prompt_data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
