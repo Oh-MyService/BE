@@ -49,7 +49,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)):
     token = request.cookies.get('access_token')
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    payload = decode_access_token(token)
+    payload = decode_access_token(token.split("Bearer ")[1])
     if payload is None:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     user_id = payload.get("user_id")
