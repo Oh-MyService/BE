@@ -29,10 +29,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://43.202.57.225:29292",
-        "http://43.202.57.225:25252",
         "http://inkyong.com",
         "https://inkyong.com"
-    ]
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -130,7 +129,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error during authentication: {e}")
 
 @app.get("/api/user_info")
-async def get_user_info(request: Request):
+async def get_user_info(request: Request, db: Session = Depends(get_db)):
     try:
         token = request.cookies.get('access_token')
         if not token:
