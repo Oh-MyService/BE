@@ -117,8 +117,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
                 data={"user_id": db_user.id, "email": email}, expires_delta=access_token_expires
             )
 
-            response = RedirectResponse(url="http://43.202.57.225:29292/login-complete")
-            response.set_cookie(key="access_token", value=f"Bearer {access_token}", httponly=True)
+            response = JSONResponse(content={"access_token": access_token})
             return response
 
     except HTTPException as e:
@@ -131,7 +130,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
 @app.get("/api/user_info")
 async def get_user_info(request: Request, db: Session = Depends(get_db)):
     try:
-        token = request.cookies.get('access_token')
+        token = request.headers.get('Authorization').split("Bearer ")[1]
         if not token:
             raise HTTPException(status_code=401, detail="Not authenticated")
         payload = decode_access_token(token)
