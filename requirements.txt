@@ -9,3 +9,4 @@ httpx
 python-multipart
 aiofiles
 jinja2
+PyJWT
