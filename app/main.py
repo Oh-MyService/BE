@@ -58,6 +58,7 @@ def get_current_user(access_token: str = Cookie(None), db: Session = Depends(get
         logging.error("User not found or token invalid")
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     logging.debug(f"Authenticated user: {user.email}")
+    
     return user
 
 @app.get("/api/login")
@@ -100,6 +101,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
             user_info = user_info_response.json()
             email = user_info.get("email")
             name = user_info.get("name")
+            
             # picture = user_info.get("picture")
 
             logging.debug(f"User info: {user_info}")
@@ -109,6 +111,9 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
                 user_data = {"email": email, "name": name, "profileimg": picture}
                 db_user = crud.create_record(db=db, model=User, **user_data)
                 logging.debug(f"Created new user: {user_data}")
+
+                request.session['user_info'] = {"user_id": db_user.id, "email": email, "name": name} # "picture": picture}
+        # 세션에 저장된 사용자 정보 로그 출력
 
             access_token_expires = timedelta(minutes=60)
             access_token = create_access_token(
