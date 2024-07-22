@@ -45,17 +45,20 @@ USER_INFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
 def get_current_user(request: Request, db: Session = Depends(get_db)):
     token = request.cookies.get('access_token')
     if not token:
+        logging.error("No token found in cookies")
         raise HTTPException(status_code=401, detail="Not authenticated")
     token = token.split("Bearer ")[1]  # 'Bearer ' 문자열 제거
     payload = decode_access_token(token)
     if payload is None:
+        logging.error("Invalid or expired token")
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     user_id = payload.get("user_id")
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
+        logging.error("User not found or token invalid")
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+    logging.debug(f"Authenticated user: {user.email}")
     return user
-
 
 @app.get("/api/login")
 async def login():
@@ -86,6 +89,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
             token_response_data = token_response.json()
             access_token = token_response_data.get("access_token")
             if not access_token:
+                logging.error("Invalid client credentials")
                 raise HTTPException(status_code=401, detail="Invalid client credentials")
 
             user_info_response = await client.get(
@@ -98,10 +102,13 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
             name = user_info.get("name")
             picture = user_info.get("picture")
 
+            logging.debug(f"User info: {user_info}")
+
             db_user = db.query(User).filter(User.email == email).first()
             if not db_user:
                 user_data = {"email": email, "name": name, "profileimg": picture}
                 db_user = crud.create_record(db=db, model=User, **user_data)
+                logging.debug(f"Created new user: {user_data}")
 
             access_token_expires = timedelta(minutes=60)
             access_token = create_access_token(
@@ -110,6 +117,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
 
             response = RedirectResponse(url="http://43.202.57.225:29292/login-complete")
             response.set_cookie(key="access_token", value=f"Bearer {access_token}", httponly=True)
+            logging.debug(f"Set cookie for access_token: {access_token}")
             return response
 
     except HTTPException as e:
@@ -118,21 +126,26 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
     except Exception as e:
         logging.error(f"Error during authentication: {e}")
         raise HTTPException(status_code=500, detail=f"Error during authentication: {e}")
-     
+    
+
 @app.get("/api/user_info")
 async def user_info(request: Request, db: Session = Depends(get_db)):
     token = request.cookies.get('access_token')
     if not token:
+        logging.error("No access token found in cookies")
         raise HTTPException(status_code=401, detail="Not authenticated")
     if token.startswith("Bearer "):
         token = token[len("Bearer "):]
     payload = decode_access_token(token)
     if payload is None:
+        logging.error("Invalid or expired token")
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     user_id = payload.get("user_id")
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
+        logging.error("User not found or token invalid")
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+    logging.debug(f"Returning user info: {user.email}")
     return {"user_id": user.id, "email": user.email, "name": user.name}
 
 @app.post("/api/prompts/")
@@ -143,16 +156,21 @@ def create_prompt(prompt_data: dict, db: Session = Depends(get_db), current_user
         return crud.create_record(db=db, model=Prompt, **prompt_data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating prompt: {e}")
+# main.py
 
 @app.get("/api/prompts/user/{user_id}")
 def get_user_prompts(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.id != user_id:
+        logging.error("Not authorized to access this user's prompts")
         raise HTTPException(status_code=403, detail="Not authorized to access this user's prompts")
     try:
         prompts = db.query(Prompt).filter(Prompt.user_id == user_id).all()
+        logging.debug(f"User prompts: {prompts}")
         return prompts
     except Exception as e:
+        logging.error(f"Error fetching user prompts: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching user prompts: {e}")
+
 
 @app.get("/api/prompts/{prompt_id}")
 def get_prompt(prompt_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
