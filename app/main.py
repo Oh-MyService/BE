@@ -10,6 +10,8 @@ import os
 from datetime import datetime, timedelta
 import json
 import logging
+from typing import Optional
+from fastapi import Cookie
 
 from . import crud
 from .database import get_db
@@ -130,25 +132,31 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
         logging.error(f"Error during authentication: {e}")
         raise HTTPException(status_code=500, detail=f"Error during authentication: {e}")
     
-@app.post("/api/user_info")
-async def user_info(access_token: str = Cookie(None), db: Session = Depends(get_db)):
+@app.get("/api/user_info")
+async def user_info(access_token: Optional[str] = Cookie(None), db: Session = Depends(get_db)):
     logging.debug("Received access_token: %s", access_token)
     if not access_token:
         logging.error("No access token found in cookies")
         raise HTTPException(status_code=401, detail="Not authenticated")
+    
     if access_token.startswith("Bearer "):
         access_token = access_token[len("Bearer "):]
+
     payload = decode_access_token(access_token)
     if payload is None:
         logging.error("Invalid or expired token")
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
     user_id = payload.get("user_id")
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
         logging.error("User not found or token invalid")
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
     logging.debug(f"Returning user info: {user.email}")
     return {"user_id": user.id, "email": user.email, "name": user.name}
+
+
 @app.post("/api/prompts/")
 def create_prompt(prompt_data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
