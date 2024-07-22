@@ -120,23 +120,20 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error during authentication: {e}")
      
 @app.get("/api/user_info")
-async def get_user_info(request: Request, db: Session = Depends(get_db)):
-    try:
-        token = request.cookies.get('access_token')
-        if not token:
-            raise HTTPException(status_code=401, detail="Not authenticated")
-        payload = decode_access_token(token)
-        if payload is None:
-            raise HTTPException(status_code=401, detail="Invalid or expired token")
-        user_id = payload.get("user_id")
-        email = payload.get("email")
-        return JSONResponse(content={"user_id": user_id, "email": email})
-    except HTTPException as e:
-        logging.error(f"HTTP Exception during getting user info: {e}")
-        raise e
-    except Exception as e:
-        logging.error(f"Error during getting user info: {e}")
-        raise HTTPException(status_code=500, detail=f"Error during getting user info: {e}")
+async def user_info(request: Request, db: Session = Depends(get_db)):
+    token = request.cookies.get('access_token')
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if token.startswith("Bearer "):
+        token = token[len("Bearer "):]
+    payload = decode_access_token(token)
+    if payload is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    user_id = payload.get("user_id")
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return {"user_id": user.id, "email": user.email, "name": user.name}
 
 @app.post("/api/prompts/")
 def create_prompt(prompt_data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
