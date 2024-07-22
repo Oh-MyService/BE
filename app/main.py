@@ -135,6 +135,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
 @app.get("/api/user_info")
 async def user_info(access_token: Optional[str] = Cookie(None), db: Session = Depends(get_db)):
     logging.debug("Received access_token: %s", access_token)
+    
     if not access_token:
         logging.error("No access token found in cookies")
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -154,7 +155,16 @@ async def user_info(access_token: Optional[str] = Cookie(None), db: Session = De
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     
     logging.debug(f"Returning user info: {user.email}")
-    return {"user_id": user.id, "email": user.email, "name": user.name}
+    return {"user_id": user.id, "email": user.email, "name": user.name} 
+
+
+@app.get("/user_info")
+async def get_user_info(request: Request):
+    user_info = request.session.get('user_info')
+    if user_info:
+        return JSONResponse(content=user_info)
+    else:
+        raise HTTPException(status_code=401, detail="User not authenticated")        
 
 
 @app.post("/api/prompts/")
