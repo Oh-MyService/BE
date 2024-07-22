@@ -119,7 +119,9 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
                 data={"user_id": db_user.id, "email": email}, expires_delta=access_token_expires
             )
 
-            return JSONResponse(content={"access_token": access_token, "token_type": "bearer"})
+            response = RedirectResponse(url="http://43.202.57.225:29292/login-complete")
+            response.set_cookie(key="access_token", value=f"Bearer {access_token}", httponly=True)
+            return response
     except HTTPException as e:
         logging.error(f"HTTP Exception during authentication: {e}")
         raise e
