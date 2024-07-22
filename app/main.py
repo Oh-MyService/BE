@@ -124,7 +124,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
             response.set_cookie(
                 key="access_token",
                 value=f"Bearer {access_token}",
-                httponly=True,
+                httponly=False,
                 secure=True,
                 samesite="Lax"
             )
