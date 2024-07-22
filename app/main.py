@@ -126,11 +126,11 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
     except Exception as e:
         logging.error(f"Error during authentication: {e}")
         raise HTTPException(status_code=500, detail=f"Error during authentication: {e}")
-
+    
 @app.get("/api/user_info")
 async def get_user_info(request: Request, db: Session = Depends(get_db)):
     try:
-        token = request.headers.get('Authorization').split("Bearer ")[1]
+        token = request.cookies.get('access_token')
         if not token:
             raise HTTPException(status_code=401, detail="Not authenticated")
         payload = decode_access_token(token)
