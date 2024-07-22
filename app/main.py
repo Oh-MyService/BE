@@ -29,12 +29,7 @@ app = FastAPI()
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://43.202.57.225:29292",
-        "http://43.202.57.225:25252",
-        "http://inkyong.com",
-        "https://inkyong.com"
-    ],
+    allow_origins=["*"],  # 모든 도메인 허용
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
