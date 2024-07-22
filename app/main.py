@@ -27,15 +27,12 @@ app = FastAPI()
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://43.202.57.225:29292",
-        "http://inkyong.com",
-        "https://inkyong.com"
-    ],
+    allow_origins=["http://43.202.57.225:29292", "http://inkyong.com", "https://inkyong.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # .env 파일에서 Google OAuth 환경 변수 읽기
 CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
@@ -83,42 +80,32 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
                     "grant_type": "authorization_code",
                 },
             )
-            logging.debug("Token response status: %s", token_response.status_code)
             token_response.raise_for_status()
             token_response_data = token_response.json()
-            logging.debug("Token response data: %s", token_response_data)
             access_token = token_response_data.get("access_token")
             if not access_token:
-                logging.error("Invalid client credentials")
                 raise HTTPException(status_code=401, detail="Invalid client credentials")
 
             user_info_response = await client.get(
                 USER_INFO_URL,
                 headers={"Authorization": f"Bearer {access_token}"},
             )
-            logging.debug("User info response status: %s", user_info_response.status_code)
             user_info_response.raise_for_status()
             user_info = user_info_response.json()
-            logging.debug("User info data: %s", user_info)
             email = user_info.get("email")
             name = user_info.get("name")
             picture = user_info.get("picture")
 
-            # 데이터베이스에서 사용자 조회
             db_user = db.query(User).filter(User.email == email).first()
             if not db_user:
-                # 사용자 데이터가 없으면 새 사용자 생성
                 user_data = {"email": email, "name": name, "profileimg": picture}
                 db_user = crud.create_record(db=db, model=User, **user_data)
 
-            # JWT 생성
             access_token_expires = timedelta(minutes=60)
             access_token = create_access_token(
                 data={"user_id": db_user.id, "email": email}, expires_delta=access_token_expires
             )
-            logging.debug("What is access_token?: %s", access_token)
 
-            # login-complete 페이지로 리디렉션하면서 JWT 쿠키 설정
             response = RedirectResponse(url="http://43.202.57.225:29292/login-complete")
             response.set_cookie(key="access_token", value=f"Bearer {access_token}", httponly=True)
             return response
@@ -129,7 +116,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
     except Exception as e:
         logging.error(f"Error during authentication: {e}")
         raise HTTPException(status_code=500, detail=f"Error during authentication: {e}")
-        
+     
 @app.get("/api/user_info")
 async def get_user_info(request: Request, db: Session = Depends(get_db)):
     try:
