@@ -33,7 +33,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # .env 파일에서 Google OAuth 환경 변수 읽기
 CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
@@ -132,8 +131,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
         logging.error(f"Error during authentication: {e}")
         raise HTTPException(status_code=500, detail=f"Error during authentication: {e}")
     
-
-@app.get("/api/user_info")
+@app.post("/api/user_info")
 async def user_info(request: Request, db: Session = Depends(get_db)):
     logging.debug("Received request: %s", request)
     logging.debug("Received cookie: %s", request.cookies)
