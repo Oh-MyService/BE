@@ -162,9 +162,8 @@ async def user_info(access_token: Optional[str] = Cookie(None), db: Session = De
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     
     logging.debug(f"Returning user info: {user.email}")
-    return JSONResponse(content=user_info)
-    #return {"user_id": user.id, "email": user.email, "name": user.name} 
-
+    #return JSONResponse(content=user_info)
+    return JSONResponse(content = {"user_id": user.id, "email": user.email, "name": user.name} ) 
 
 @app.get("/user_info")
 async def get_user_info(request: Request):
