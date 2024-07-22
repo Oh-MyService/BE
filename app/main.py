@@ -138,7 +138,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error during authentication: {e}")
     
 @app.get("/api/user_info")
-async def user_info(access_token: Optional[str] = Cookie(None), db: Session = Depends(get_db)):
+async def user_info(access_token: Optional[str] = Cookie(None)): #,db: Session = Depends(get_db)):
     logging.debug("Received access_token: %s", access_token)
     
     if not access_token:
