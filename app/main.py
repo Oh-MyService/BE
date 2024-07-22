@@ -116,7 +116,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
             access_token = create_access_token(
                 data={"user_id": db_user.id, "email": email}, expires_delta=access_token_expires
             )
-            logging.debug("User info response status: %s", access_token)
+            logging.debug("What is access_token?: %s", access_token)
 
             # login-complete 페이지로 리디렉션하면서 JWT 쿠키 설정
             response = RedirectResponse(url="http://43.202.57.225:29292/login-complete")
