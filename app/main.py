@@ -135,6 +135,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
 
 @app.get("/api/user_info")
 async def user_info(request: Request, db: Session = Depends(get_db)):
+    logging.debug("Received cookie: %s", request.cookies)
     token = request.cookies.get('access_token')
     logging.debug("Received access_token: %s", token)
     if not token:
