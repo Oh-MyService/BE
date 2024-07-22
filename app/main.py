@@ -143,11 +143,7 @@ async def user_info(access_token: Optional[str] = Cookie(None)): #,db: Session =
     
     if not access_token:
         logging.error("No access token found in cookies")
-
-        user_id = payload.get("user_id")
-        user = db.query(User).filter(User.id == user_id).first()
-       # raise HTTPException(status_code=401, detail="Not authenticated")
-        raise HTTPException( content={"user_id": user.id})
+        raise HTTPException(status_code=401, detail="Not authenticated")
     
     if access_token.startswith("Bearer "):
         access_token = access_token[len("Bearer "):]
