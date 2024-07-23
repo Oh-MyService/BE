@@ -32,7 +32,7 @@ async def add_cors_headers(request, call_next):
     response.headers["Access-Control-Allow-Origin"] = "http://43.202.57.225:29292", "https://43.202.57.225:29292", "http://43.202.57.225:28282","https://43.202.57.225:28282", "http://43.202.57.225:25252", "http://inkyong.com", "https://inkyong.com"
     response.headers["Access-Control-Allow-Credentials"] = "true"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    response.headers["Access-Control-Allow-Headers"] = "*"
     return response
 
 origins = [
