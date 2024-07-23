@@ -8,9 +8,7 @@ from .models import User  # Adjusted import
 from .database import SessionLocal, engine  # Adjusted import
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-
-
-
+from typing import Optional  # Import Optional from typing
 
 app = FastAPI()
 
@@ -18,7 +16,6 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 origins = [
     "http://localhost:5500", "*","http://43.202.57.225:28282","http://43.202.57.225:29292" # Adjust the port if your frontend runs on a different one
-
 ]
 
 app.add_middleware(
@@ -43,7 +40,6 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 SECRET_KEY = "mgzAyCztWBM-E1D4js6ythtkh6WOlRqQ6tRhAR4oWfE"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
 
 class UserCreate(BaseModel):
     username: str
@@ -76,7 +72,7 @@ def authenticate_user(username: str, password: str, db: Session):
     return user
 
 # Create access token
-def create_access_token(data: dict, expires_delta: timedelta | None = None):
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):  # Use Optional for Python 3.9 compatibility
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
@@ -100,7 +96,6 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
         data={"sub": user.username}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
-
 
 def verify_token(token: str = Depends(oauth2_scheme)):
     try:
