@@ -145,10 +145,13 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
 @app.get("/api/user_info")
 async def user_info(access_token: Optional[str] = Cookie(None), db: Session = Depends(get_db)):
     logging.debug("Received access_token: %s", access_token)
+    user_id = payload.get("user_id")
+    user = db.query(User).filter(User.id == user_id).first()
     
     if not access_token:
         logging.error("No access token found in cookies")
         #raise HTTPException(status_code=401, detail="Not authenticated")
+        return HTTPException(content = {"user_id": user.id, "email": user.email, "name": user.name} )
     
     if access_token.startswith("Bearer "):
         access_token = access_token[len("Bearer "):]
