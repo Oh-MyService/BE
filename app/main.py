@@ -124,7 +124,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
 
             db_user = db.query(User).filter(User.email == email).first()
             if not db_user:
-                user_data = {"email": email, "name": name, "profileimg": picture}
+                user_data = {"email": email, "name": name}# "profileimg": picture}
                 db_user = crud.create_record(db=db, model=User, **user_data)
                 logging.debug(f"Created new user: {user_data}")
 
@@ -136,14 +136,15 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
                 data={"user_id": db_user.id, "email": email}, expires_delta=access_token_expires
             )
 
-            response = RedirectResponse(url="http://43.202.57.225:29292/login-complete")
+            response = JSONResponse(url="http://43.202.57.225:29292/login-complete")
             response.set_cookie(
                 key="access_token",
                 value=f"Bearer {access_token}",
                 httponly=False,
-                secure=True,
-                samesite="Lax"
+                secure=False,
+                samesite="None" #모든 요청에 대해 쿠키 허용
             )
+            
             return response
 
     except HTTPException as e:
