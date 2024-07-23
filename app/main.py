@@ -4,10 +4,11 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
-from models import User
-from database import SessionLocal, engine
+from .models import User  # Adjusted import
+from .database import SessionLocal, engine  # Adjusted import
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+
 
 
 
