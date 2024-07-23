@@ -27,7 +27,7 @@ logging.basicConfig(level=logging.DEBUG)
 app = FastAPI()
 
 origins = [
-   "http://43.202.57.225:29292", "https://43.202.57.225:29292", "http://43.202.57.225:28282","https://43.202.57.225:28282", "http://43.202.57.225:25252", "http://inkyong.com", "https://inkyong.com"
+   "http://43.202.57.225:29292", "https://43.202.57.225:29292","http://43.202.57.225:29292/", "http://43.202.57.225:28282","https://43.202.57.225:28282", "http://43.202.57.225:25252", "http://inkyong.com", "https://inkyong.com"
 ]
 
 # CORS settings
@@ -46,9 +46,10 @@ async def add_cors_headers(request, call_next):
     origin = request.headers.get('origin')
     if origin in origins:
         response.headers["Access-Control-Allow-Origin"] = origin
-    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Credentials"] = "True"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    response.headers["Access-Control-Allow-Credentials"] = "True"
     return response
 
 # Read Google OAuth environment variables
@@ -157,8 +158,10 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
 async def options_user_info():
     return JSONResponse(status_code=200, headers={
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        'Access-Control-Allow-Credentials': 'true',
+        
     })
     
 @app.get("/api/user_info")
