@@ -27,7 +27,7 @@ logging.basicConfig(level=logging.DEBUG)
 app = FastAPI()
 
 origins = [
-   "http://43.202.57.225:29292", "https://43.202.57.225:29292","http://43.202.57.225:29292/", "http://43.202.57.225:28282","https://43.202.57.225:28282", "http://43.202.57.225:25252", "http://inkyong.com", "https://inkyong.com"
+   "http://43.202.57.225:29292", "https://43.202.57.225:29292", "http://43.202.57.225:28282","https://43.202.57.225:28282", "http://43.202.57.225:25252", "http://inkyong.com", "https://inkyong.com"
 ]
 
 # CORS settings
@@ -43,7 +43,9 @@ app.add_middleware(
 @app.middleware("http")
 async def add_cors_headers(request, call_next):
     response = await call_next(request)
-    response.headers["Access-Control-Allow-Origin"] = origins
+    origin = request.headers.get('origin')
+    if origin in origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
     response.headers["Access-Control-Allow-Credentials"] = "true"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
@@ -155,10 +157,8 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
 async def options_user_info():
     return JSONResponse(status_code=200, headers={
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        'Access-Control-Allow-Credentials': 'true',
-        
     })
     
 @app.get("/api/user_info")
@@ -167,7 +167,7 @@ async def user_info(access_token: Optional[str] = Cookie(None), db: Session = De
     
     if not access_token:
         logging.error("No access token found in cookies")
-        #raise HTTPException(status_code=401, detail="Not authenticated")
+        raise HTTPException(status_code=401, detail="Not authenticated")
         #return JSONResponse(content = {"user_id": user.id, "email": user.email, "name": user.name} )
     
     if access_token.startswith("Bearer "):
