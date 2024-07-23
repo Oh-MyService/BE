@@ -136,6 +136,14 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
     except Exception as e:
         logging.error(f"Error during authentication: {e}")
         raise HTTPException(status_code=500, detail=f"Error during authentication: {e}")
+
+@app.options("/api/user_info")
+async def options_user_info():
+    return JSONResponse(status_code=200, headers={
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    })
     
 @app.get("/api/user_info")
 async def user_info(access_token: Optional[str] = Cookie(None), db: Session = Depends(get_db)):
