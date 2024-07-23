@@ -108,7 +108,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
 
             db_user = db.query(User).filter(User.email == email).first()
             if not db_user:
-                user_data = {"email": email, "name": name, "profileimg": picture}
+                user_data = {"email": email, "name": name}
                 db_user = crud.create_record(db=db, model=User, **user_data)
                 logging.debug(f"Created new user: {user_data}")
 
