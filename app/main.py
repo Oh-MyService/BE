@@ -76,15 +76,6 @@ async def login():
         logging.error(f"Error during login: {e}")
         raise HTTPException(status_code=500, detail=f"Error during login: {e}")
 
-from fastapi import FastAPI, HTTPException, Depends, Request
-from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
-import httpx
-import logging
-from datetime import timedelta
-
-app = FastAPI()
-
 @app.get("/auth")
 async def auth(request: Request, code: str, db: Session = Depends(get_db)):
     try:
@@ -115,6 +106,8 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
             user_info = user_info_response.json()
             email = user_info.get("email")
             name = user_info.get("name")
+            
+            # picture = user_info.get("picture")
 
             logging.debug(f"User info: {user_info}")
 
@@ -124,14 +117,15 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
                 db_user = crud.create_record(db=db, model=User, **user_data)
                 logging.debug(f"Created new user: {user_data}")
 
-                request.session['user_info'] = {"user_id": db_user.id, "email": email, "name": name}
+                request.session['user_info'] = {"user_id": db_user.id, "email": email, "name": name} # "picture": picture}
+        # 세션에 저장된 사용자 정보 로그 출력
 
             access_token_expires = timedelta(minutes=60)
             access_token = create_access_token(
                 data={"user_id": db_user.id, "email": email}, expires_delta=access_token_expires
             )
 
-            response = JSONResponse(content={"access_token": access_token})
+            response = RedirectResponse(url="http://43.202.57.225:29292/login-complete")
             response.set_cookie(
                 key="access_token",
                 value=f"Bearer {access_token}",
@@ -140,10 +134,13 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
                 samesite="Lax"
             )
             return response
-    except Exception as e:
-        logging.error(f"An error occurred: {e}")
-        raise HTTPException(status_code=500, detail="Authentication failed")
 
+    except HTTPException as e:
+        logging.error(f"HTTP Exception during authentication: {e}")
+        raise e
+    except Exception as e:
+        logging.error(f"Error during authentication: {e}")
+        raise HTTPException(status_code=500, detail=f"Error during authentication: {e}")
     
 @app.get("/api/user_info")
 async def user_info(access_token: Optional[str] = Cookie(None), db: Session = Depends(get_db)):
