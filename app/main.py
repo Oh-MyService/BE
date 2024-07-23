@@ -26,26 +26,28 @@ logging.basicConfig(level=logging.DEBUG)
 
 app = FastAPI()
 
+origins = [
+   "http://43.202.57.225:29292", "https://43.202.57.225:29292", "http://43.202.57.225:28282","https://43.202.57.225:28282", "http://43.202.57.225:25252", "http://inkyong.com", "https://inkyong.com"
+]
+
 @app.middleware("http")
 async def add_cors_headers(request, call_next):
     response = await call_next(request)
-    response.headers["Access-Control-Allow-Origin"] = "http://43.202.57.225:29292", "https://43.202.57.225:29292", "http://43.202.57.225:28282","https://43.202.57.225:28282", "http://43.202.57.225:25252", "http://inkyong.com", "https://inkyong.com"
+    origin = request.headers.get('origin')
+    if origin in origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
     response.headers["Access-Control-Allow-Credentials"] = "true"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
-
-origins = [
-    "http://43.202.57.225:29292", "https://43.202.57.225:29292", "http://43.202.57.225:28282","https://43.202.57.225:28282", "http://43.202.57.225:25252", "http://inkyong.com", "https://inkyong.com"
-]
 
 # CORS settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://43.202.57.225:29292", "https://43.202.57.225:29292", "http://43.202.57.225:28282","https://43.202.57.225:28282", "http://43.202.57.225:25252", "http://inkyong.com", "https://inkyong.com"],
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # Read Google OAuth environment variables
