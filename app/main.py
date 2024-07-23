@@ -29,7 +29,12 @@ app = FastAPI()
 # CORS settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://43.202.57.225:29292", "http://43.202.57.225:29292", "http://43.202.57.225:25252", "http://inkyong.com", "https://inkyong.com"],
+    allow_origins=[
+        "http://43.202.57.225:29292", 
+        "http://43.202.57.225:25252", 
+        "http://inkyong.com", 
+        "https://inkyong.com"
+        ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -108,7 +113,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
 
             db_user = db.query(User).filter(User.email == email).first()
             if not db_user:
-                user_data = {"email": email, "name": name, "profileimg": picture}
+                user_data = {"email": email, "name": name}
                 db_user = crud.create_record(db=db, model=User, **user_data)
                 logging.debug(f"Created new user: {user_data}")
 
