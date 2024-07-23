@@ -16,7 +16,7 @@ app = FastAPI()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 origins = [
-    "http://localhost:5500", "*","http://43.202.57.225:28282" # Adjust the port if your frontend runs on a different one
+    "http://localhost:5500", "*","http://43.202.57.225:28282","http://43.202.57.225:29292" # Adjust the port if your frontend runs on a different one
 
 ]
 
