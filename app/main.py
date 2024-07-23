@@ -29,13 +29,7 @@ app = FastAPI()
 # CORS settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://43.202.57.225:29292", 
-        "https://43.202.57.225:29292",
-        "http://43.202.57.225:25252", 
-        "http://inkyong.com", 
-        "https://inkyong.com"
-        ],
+    allow_origins=["http://43.202.57.225:29292", "http://43.202.57.225:29292", "http://43.202.57.225:25252", "http://inkyong.com", "https://inkyong.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -114,7 +108,7 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
 
             db_user = db.query(User).filter(User.email == email).first()
             if not db_user:
-                user_data = {"email": email, "name": name}
+                user_data = {"email": email, "name": name, "profileimg": picture}
                 db_user = crud.create_record(db=db, model=User, **user_data)
                 logging.debug(f"Created new user: {user_data}")
 
@@ -146,17 +140,13 @@ async def auth(request: Request, code: str, db: Session = Depends(get_db)):
 @app.get("/api/user_info")
 async def user_info(access_token: Optional[str] = Cookie(None), db: Session = Depends(get_db)):
     logging.debug("Received access_token: %s", access_token)
-    user_id = payload.get("user_id")
-    user = db.query(User).filter(User.id == user_id).first()
     
     if not access_token:
         logging.error("No access token found in cookies")
-        #raise HTTPException(status_code=401, detail="Not authenticated")
-        return HTTPException(content = {"user_id": user.id, "email": user.email, "name": user.name} )
+        raise HTTPException(status_code=401, detail="Not authenticated")
     
     if access_token.startswith("Bearer "):
         access_token = access_token[len("Bearer "):]
-        return JSONResponse(content = {"user_id": user.id, "email": user.email, "name": user.name} )
 
     payload = decode_access_token(access_token)
     if payload is None:
