@@ -30,6 +30,16 @@ origins = [
    "http://43.202.57.225:29292", "https://43.202.57.225:29292", "http://43.202.57.225:28282","https://43.202.57.225:28282", "http://43.202.57.225:25252", "http://inkyong.com", "https://inkyong.com"
 ]
 
+# CORS settings
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+)
+
+
 @app.middleware("http")
 async def add_cors_headers(request, call_next):
     response = await call_next(request)
@@ -40,15 +50,6 @@ async def add_cors_headers(request, call_next):
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
-
-# CORS settings
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
-)
 
 # Read Google OAuth environment variables
 CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
