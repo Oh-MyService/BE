@@ -29,7 +29,7 @@ app = FastAPI()
 # CORS settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://43.202.57.225:29292", "https://43.202.57.225:29292", "http://43.202.57.225:25252", "http://inkyong.com", "https://inkyong.com"],
+    allow_origins=["http://43.202.57.225:29292", "https://43.202.57.225:29292", "http://43.202.57.225:28282","https://43.202.57.225:28282", "http://43.202.57.225:25252", "http://inkyong.com", "https://inkyong.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -143,7 +143,7 @@ async def user_info(access_token: Optional[str] = Cookie(None), db: Session = De
     
     if not access_token:
         logging.error("No access token found in cookies")
-        #raise HTTPException(status_code=401, detail="Not authenticated")
+        raise HTTPException(status_code=401, detail="Not authenticated")
         #return JSONResponse(content = {"user_id": user.id, "email": user.email, "name": user.name} )
     
     if access_token.startswith("Bearer "):
