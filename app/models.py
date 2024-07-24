@@ -1,28 +1,13 @@
-from sqlalchemy.ext.automap import automap_base
-from sqlalchemy.orm import relationship, Session
-from sqlalchemy import create_engine
-import os
-from dotenv import load_dotenv
+from sqlalchemy import Column, Integer, String
+from .database import Base  # Adjusted import
+from .database import engine  # Adjusted import
 
-# .env 파일에서 환경 변수 로드
-load_dotenv()
+class User(Base):
+    __tablename__ = "users"
 
-# .env 파일에서 DATABASE_URL 읽기
-DATABASE_URL = os.getenv("DATABASE_URL")
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), unique=True, index=True)  # Specify length for VARCHAR
+    hashed_password = Column(String(128))  # Specify length for VARCHAR
 
-# DATABASE_URL 출력하여 확인
-print(f"DATABASE_URL: {DATABASE_URL}")
-
-# 데이터베이스 엔진 생성
-engine = create_engine(DATABASE_URL, echo=True)
-Base = automap_base()
-
-# 테이블 구조 반영
-Base.prepare(engine, reflect=True)
-
-# 자동으로 생성된 클래스들 가져오기
-User = Base.classes.users
-Prompt = Base.classes.prompts
-Result = Base.classes.results
-Collection = Base.classes.collections
-CollectionResult = Base.classes.collection_results
+# Create the database tables if they don't exist
+User.metadata.create_all(bind=engine)
