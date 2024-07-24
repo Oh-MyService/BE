@@ -1,27 +1,22 @@
-from fastapi import FastAPI, Depends, HTTPException, Request, Form, UploadFile, File, Cookie
+from fastapi import FastAPI, Depends, HTTPException, Request, Form, UploadFile, File, Cookie, status
 from sqlalchemy.orm import Session
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jose import JWTError, jwt
-from datetime import datetime, timedelta
-from passlib.context import CryptContext
-from .models import User  # Adjusted import
-from .database import SessionLocal, engine  # Adjusted import
-from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import RedirectResponse, JSONResponse
 import httpx
-from typing import List
+from typing import List, Optional
+from pydantic import BaseModel, create_model
 from dotenv import load_dotenv
 import base64
 import os
 from datetime import datetime, timedelta
 import json
 import logging
-from typing import Optional
-from fastapi import Cookie
+from passlib.context import CryptContext
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from jose import JWTError, jwt
 
 from . import crud
-from .database import get_db
+from .database import get_db, engine, SessionLocal
 from .models import User, Prompt, Result, Collection, CollectionResult
 from .utils import sqlalchemy_to_pydantic, create_access_token, decode_access_token
 
@@ -36,17 +31,17 @@ app = FastAPI()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 origins = [
-    "http://localhost:5500", "*","http://43.202.57.225:28282","http://43.202.57.225:29292" # Adjust the port if your frontend runs on a different one
+   "http://43.202.57.225:29292", "https://43.202.57.225:29292", "http://43.202.57.225:28282","https://43.202.57.225:28282", "http://43.202.57.225:25252", "http://inkyong.com", "https://inkyong.com"
 ]
 
+# CORS settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # Allows all origins from the list
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["*"],
 )
-
 
 @app.middleware("http")
 async def add_cors_headers(request, call_next):
@@ -67,141 +62,77 @@ AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 USER_INFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
 
-def get_current_user(access_token: str = Cookie(None), db: Session = Depends(get_db)):
-    if not access_token:
-        logging.error("No token found in cookies")
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    token = access_token.split("Bearer ")[1]  # 'Bearer ' 문자열 제거
-    payload = decode_access_token(token)
-    if payload is None:
-        logging.error("Invalid or expired token")
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-    user_id = payload.get("user_id")
-    user = db.query(User).filter(User.id == user_id).first()
-    if user is None:
-        logging.error("User not found or token invalid")
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-    logging.debug(f"Authenticated user: {user.email}")
-    
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Your JWT secret and algorithm
+SECRET_KEY = os.getenv("SECRET_KEY", "your_secret_key")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+def get_user_by_username(db: Session, username: str):
+    return db.query(User).filter(User.username == username).first()
+
+UserCreate = create_model('UserCreate', username=(str, ...), password=(str, ...))
+
+@app.post("/register")
+def register_user(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    db_user = get_user_by_username(db, username=username)
+    if db_user:
+        raise HTTPException(status_code=400, detail="Username already registered")
+    try:
+        hashed_password = pwd_context.hash(password)
+        user_data = {"username": username, "hashed_password": hashed_password}
+        new_user = crud.create_record(db=db, model=User, **user_data)
+        return {column.name: getattr(new_user, column.name) for column in new_user.__table__.columns}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating user: {e}")
+
+def authenticate_user(username: str, password: str, db: Session):
+    user = get_user_by_username(db, username)
+    if not user or not pwd_context.verify(password, user.hashed_password):
+        return False
     return user
 
-@app.get("/api/login")
-async def login():
-    try:
-        return RedirectResponse(
-            f"{AUTHORIZATION_URL}?response_type=code&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=openid%20email%20profile"
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+@app.post("/token")
+def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = authenticate_user(form_data.username, form_data.password, db)
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
         )
-    except Exception as e:
-        logging.error(f"Error during login: {e}")
-        raise HTTPException(status_code=500, detail=f"Error during login: {e}")
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
 
-@app.get("/auth")
-async def auth(request: Request, code: str, db: Session = Depends(get_db)):
+def verify_token(token: str = Depends(oauth2_scheme)):
     try:
-        logging.debug("Received code: %s", code)
-        async with httpx.AsyncClient() as client:
-            token_response = await client.post(
-                TOKEN_URL,
-                data={
-                    "code": code,
-                    "client_id": CLIENT_ID,
-                    "client_secret": CLIENT_SECRET,
-                    "redirect_uri": REDIRECT_URI,
-                    "grant_type": "authorization_code",
-                },
-            )
-            token_response.raise_for_status()
-            token_response_data = token_response.json()
-            access_token = token_response_data.get("access_token")
-            if not access_token:
-                logging.error("Invalid client credentials")
-                raise HTTPException(status_code=401, detail="Invalid client credentials")
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=403, detail="Token is invalid or expired")
+        return payload
+    except JWTError:
+        raise HTTPException(status_code=403, detail="Token is invalid or expired")
 
-            user_info_response = await client.get(
-                USER_INFO_URL,
-                headers={"Authorization": f"Bearer {access_token}"},
-            )
-            user_info_response.raise_for_status()
-            user_info = user_info_response.json()
-            email = user_info.get("email")
-            name = user_info.get("name")
-            
-            # picture = user_info.get("picture")
-
-            logging.debug(f"User info: {user_info}")
-
-            db_user = db.query(User).filter(User.email == email).first()
-            if not db_user:
-                user_data = {"email": email, "name": name}# "profileimg": picture}
-                db_user = crud.create_record(db=db, model=User, **user_data)
-                logging.debug(f"Created new user: {user_data}")
-
-                request.session['user_info'] = {"user_id": db_user.id, "email": email, "name": name} # "picture": picture}
-        # 세션에 저장된 사용자 정보 로그 출력
-
-            access_token_expires = timedelta(minutes=60)
-            access_token = create_access_token(
-                data={"user_id": db_user.id, "email": email}, expires_delta=access_token_expires
-            )
-
-            response = JSONResponse(url="http://43.202.57.225:29292/login-complete")
-            response.set_cookie(
-                key="access_token",
-                value=f"Bearer {access_token}",
-                httponly=False,
-                secure=False,
-                samesite="None" #모든 요청에 대해 쿠키 허용
-            )
-            
-            return response
-
-    except HTTPException as e:
-        logging.error(f"HTTP Exception during authentication: {e}")
-        raise e
-    except Exception as e:
-        logging.error(f"Error during authentication: {e}")
-        raise HTTPException(status_code=500, detail=f"Error during authentication: {e}")
-
-@app.options("/api/user_info")
-async def options_user_info():
-    return JSONResponse(status_code=200, headers={
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    })
-    
-@app.get("/api/user_info")
-async def user_info(access_token: Optional[str] = Cookie(None), db: Session = Depends(get_db)):
-    logging.debug("Received access_token: %s", access_token)
-    
-    if not access_token:
-        logging.error("No access token found in cookies")
-        raise HTTPException(status_code=401, detail="Not authenticated")
-        #return JSONResponse(content = {"user_id": user.id, "email": user.email, "name": user.name} )
-    
-    if access_token.startswith("Bearer "):
-        access_token = access_token[len("Bearer "):]
-
-    payload = decode_access_token(access_token)
-    if payload is None:
-        logging.error("Invalid or expired token")
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-    
-    user_id = payload.get("user_id")
-    user = db.query(User).filter(User.id == user_id).first()
-    if user is None:
-        logging.error("User not found or token invalid")
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-    
-    logging.debug(f"Returning user info: {user.email}")
-    response = JSONResponse(content={
-        "user_id": user.id,
-        "email": user.email,
-        "name": user.name
-    })
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    return response
-
+@app.get("/verify-token/{token}")
+async def verify_user_token(token: str):
+    verify_token(token=token)
+    return {"message": "Token is valid"}
 
 @app.get("/user_info")
 async def get_user_info(request: Request):
@@ -209,8 +140,20 @@ async def get_user_info(request: Request):
     if user_info:
         return JSONResponse(content=user_info)
     else:
-        raise HTTPException(status_code=401, detail="User not authenticated")        
+        raise HTTPException(status_code=401, detail="User not authenticated")
 
+def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+        user = get_user_by_username(db, username=username)
+        if user is None:
+            raise HTTPException(status_code=401, detail="User not found")
+        return user
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
 @app.post("/api/prompts/")
 def create_prompt(prompt_data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -221,25 +164,21 @@ def create_prompt(prompt_data: dict, db: Session = Depends(get_db), current_user
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating prompt: {e}")
 
-
 @app.get("/api/prompts/user/{user_id}")
 def get_user_prompts(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.id != user_id:
         logging.error("Not authorized to access this user's prompts")
         raise HTTPException(status_code=403, detail="Not authorized to access this user's prompts")
     try:
-        prompts = db.query(Prompt).filter(Prompt.user_id == user_id).all()
-        logging.debug(f"User prompts: {prompts}")
-        return prompts
+        return db.query(Prompt).filter(Prompt.user_id == user_id).all()
     except Exception as e:
         logging.error(f"Error fetching user prompts: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching user prompts: {e}")
 
-
 @app.get("/api/prompts/{prompt_id}")
 def get_prompt(prompt_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
-        prompt = db.query(Prompt).filter(Prompt.id == prompt_id).first()
+        prompt = crud.get_record(db=db, model=Prompt, record_id=prompt_id)
         if not prompt or prompt.user_id != current_user.id:
             raise HTTPException(status_code=404, detail="Prompt not found or not authorized")
         return prompt
@@ -261,7 +200,7 @@ async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...
 @app.get("/api/results/{prompt_id}")
 def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
-        prompt = db.query(Prompt).filter(Prompt.id == prompt_id).first()
+        prompt = crud.get_record(db=db, model=Prompt, record_id=prompt_id)
         if not prompt or prompt.user_id != current_user.id:
             raise HTTPException(status_code=404, detail="Prompt not found or not authorized")
         results = db.query(Result).filter(Result.prompt_id == prompt_id).all()
@@ -322,7 +261,7 @@ def create_collection(collection_name: str = Form(...), db: Session = Depends(ge
 
 @app.post("/api/collections/{collection_id}/add_result")
 def add_result_to_collection(collection_id: int, result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    collection = db.query(Collection).filter(Collection.id == collection_id).first()
+    collection = crud.get_record(db=db, model=Collection, record_id=collection_id)
     if not collection or collection.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Collection not found or not authorized")
     try:
