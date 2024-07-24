@@ -10,3 +10,9 @@ python-multipart
 aiofiles
 jinja2
 PyJWT
+
+jose
+bcrypt
+cryptography
+python-jose
+passlib
