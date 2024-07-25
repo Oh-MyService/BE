@@ -155,7 +155,7 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
-@app.post("/api/prompts/")
+@app.post("/api/prompts")
 def create_prompt(prompt_data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         prompt_data['user_id'] = current_user.id
@@ -185,7 +185,7 @@ def get_prompt(prompt_id: int, db: Session = Depends(get_db), current_user: User
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching prompt: {e}")
 
-@app.post("/api/results/")
+@app.post("/api/results")
 async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         image_data = await image.read()
@@ -222,7 +222,7 @@ def get_user_results(user_id: int, db: Session = Depends(get_db), current_user: 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching user results: {e}")
 
-@app.get("/api/user_results/")
+@app.get("/api/user_results")
 def get_user_results(request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         user_id = current_user.id
@@ -250,7 +250,7 @@ def get_user_results(request: Request, db: Session = Depends(get_db), current_us
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching user results and collections: {e}")
 
-@app.post("/api/collections/")
+@app.post("/api/collections")
 def create_collection(collection_name: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         collection_data = {"created_at": datetime.now(), "user_id": current_user.id, "collection_name": collection_name}
@@ -271,7 +271,7 @@ def add_result_to_collection(collection_id: int, result_id: int, db: Session = D
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error adding result to collection: {e}")
 
-@app.get("/api/user_collections/")
+@app.get("/api/user_collections")
 def get_user_collections(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         user_id = current_user.id
