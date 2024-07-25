@@ -130,9 +130,10 @@ def verify_token(token: str = Depends(oauth2_scheme)):
         raise HTTPException(status_code=403, detail="Token is invalid or expired")
 
 @app.get("/verify-token/{token}")
-async def verify_user_token(token: str):
-    verify_token(token=token)
-    return {"message": "Token is valid"}
+async def verify_user_token(token: str, db: Session = Depends(get_db)):
+    payload = verify_token(token)
+    user = get_user_by_username(db, username=payload["sub"])
+    return {"username": user.username, "name": user.name}
 
 @app.get("/user_info")
 async def get_user_info(request: Request):
