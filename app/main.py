@@ -63,7 +63,7 @@ async def add_cors_headers(request, call_next):
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     logging.debug(f"Response headers: {response.headers}")
-    return responsea
+    return response
 
 # Google OAuth 관련
 CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
