@@ -146,22 +146,27 @@ async def get_user_info(request: Request):
     else:
         raise HTTPException(status_code=401, detail="User not authenticated")
 
-def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        logging.debug(f"Payload from token: {payload}")
+        payload = decode_access_token(token)
         username: str = payload.get("sub")
         if username is None:
-            logging.error("Username not found in token payload")
-            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-        user = get_user_by_username(db, username=username)
-        if user is None:
-            logging.error(f"User not found: {username}")
-            raise HTTPException(status_code=401, detail="User not found")
-        return user
-    except JWTError as e:
-        logging.error(f"JWT Error: {e}")
-        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    user = db.query(User).filter(User.username == username).first()
+    if user is None:
+        raise credentials_exception
+    return user
+
+@app.post("/secure-endpoint")
+def secure_endpoint(current_user: User = Depends(get_current_user)):
+    return {"message": "Secure data", "user": current_user.username}
 
 def start_image_generation(prompt: str, task_id: str):
     task_data = {"prompt": prompt, "task_id": task_id, "status": "queued"}
@@ -172,14 +177,17 @@ def start_image_generation(prompt: str, task_id: str):
 # prompt 
 @app.post("/api/prompts")
 def create_prompt(content: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    logging.debug(f"Received request to create prompt with content: {content} for user ID: {current_user.id}")
     db_prompt = db.query(Prompt).filter(Prompt.content == content).first()
     if db_prompt:
         raise HTTPException(status_code=400, detail="Prompt already exists")
     try:
         prompt_data = {"content": content, "user_id": current_user.id, "created_at": datetime.now()}
         new_prompt = crud.create_record(db=db, model=Prompt, **prompt_data)
+        logging.debug(f"Created new prompt: {new_prompt}")
         return {column.name: getattr(new_prompt, column.name) for column in new_prompt.__table__.columns}
     except Exception as e:
+        logging.error(f"Error creating prompt: {e}")
         raise HTTPException(status_code=500, detail=f"Error creating prompt: {e}")
 
 @app.get("/api/prompts/user/{user_id}")
