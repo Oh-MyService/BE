@@ -33,6 +33,7 @@ redis_client = redis.Redis(host='43.202.57.225', port=26262, db=0)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
+# Define origins
 origins = [
     "http://43.202.57.225:29292",
     "https://43.202.57.225:29292",

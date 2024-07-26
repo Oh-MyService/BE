@@ -2,6 +2,7 @@ from pydantic import BaseModel, create_model
 from sqlalchemy.orm import class_mapper
 import logging
 import jwt
+from jwt import ExpiredSignatureError, PyJWTError
 from datetime import datetime, timedelta
 from typing import Optional
 import os
@@ -29,10 +30,10 @@ def decode_access_token(token: str):
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         logging.debug(f"JWT Token decoded: {payload}")
         return payload
-    except jwt.ExpiredSignatureError:
+    except ExpiredSignatureError:
         logging.error("JWT Token expired")
         return None
-    except jwt.JWTError:
+    except PyJWTError:
         logging.error("JWT Token error")
         return None
 
@@ -45,10 +46,10 @@ def is_token_expired(token: str):
             return True
         logging.debug("JWT Token is not expired")
         return False
-    except jwt.ExpiredSignatureError:
+    except ExpiredSignatureError:
         logging.debug("JWT Token is expired")
         return True
-    except jwt.JWTError:
+    except PyJWTError:
         logging.debug("JWT Token is invalid")
         return True
 
