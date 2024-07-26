@@ -57,7 +57,7 @@ async def add_cors_headers(request, call_next):
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
 
-# Read Google OAuth environment variables
+# Google OAuth 관련
 CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://inkyong.com/auth")
@@ -68,11 +68,12 @@ USER_INFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Your JWT secret and algorithm
+# JWT secret and algorithm
 SECRET_KEY = os.getenv("SECRET_KEY", "your_secret_key")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
+# user
 def get_user_by_username(db: Session, username: str):
     return db.query(User).filter(User.username == username).first()
 
@@ -148,14 +149,18 @@ async def get_user_info(request: Request):
 def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        logging.debug(f"Payload from token: {payload}")
         username: str = payload.get("sub")
         if username is None:
+            logging.error("Username not found in token payload")
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
         user = get_user_by_username(db, username=username)
         if user is None:
+            logging.error(f"User not found: {username}")
             raise HTTPException(status_code=401, detail="User not found")
         return user
-    except JWTError:
+    except JWTError as e:
+        logging.error(f"JWT Error: {e}")
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
 def start_image_generation(prompt: str, task_id: str):
@@ -163,12 +168,17 @@ def start_image_generation(prompt: str, task_id: str):
     redis_client.lpush("image_queue", json.dumps(task_data))
     redis_client.set(task_id, json.dumps(task_data))
 
+
+# prompt 
 @app.post("/api/prompts")
-def create_prompt(prompt_data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_prompt(content: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    db_prompt = db.query(Prompt).filter(Prompt.content == content).first()
+    if db_prompt:
+        raise HTTPException(status_code=400, detail="Prompt already exists")
     try:
-        prompt_data['user_id'] = current_user.id
-        prompt_data['created_at'] = datetime.now()
-        return crud.create_record(db=db, model=Prompt, **prompt_data)
+        prompt_data = {"content": content, "user_id": current_user.id, "created_at": datetime.now()}
+        new_prompt = crud.create_record(db=db, model=Prompt, **prompt_data)
+        return {column.name: getattr(new_prompt, column.name) for column in new_prompt.__table__.columns}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating prompt: {e}")
 
@@ -193,6 +203,7 @@ def get_prompt(prompt_id: int, db: Session = Depends(get_db), current_user: User
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching prompt: {e}")
 
+# result
 @app.post("/api/results")
 async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:

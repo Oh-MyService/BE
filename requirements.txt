@@ -16,3 +16,4 @@ bcrypt
 cryptography
 python-jose
 passlib
+redis
