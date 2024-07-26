@@ -34,15 +34,20 @@ redis_client = redis.Redis(host='43.202.57.225', port=26262, db=0)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 origins = [
-   "http://43.202.57.225:29292", "https://43.202.57.225:29292", "http://43.202.57.225:28282","https://43.202.57.225:28282", "http://43.202.57.225:25252", "http://inkyong.com", "https://inkyong.com"
+    "http://43.202.57.225:29292",
+    "https://43.202.57.225:29292",
+    "http://43.202.57.225:28282",
+    "https://43.202.57.225:28282",
+    "http://43.202.57.225:25252",
+    "http://inkyong.com",
+    "https://inkyong.com",
 ]
 
-# CORS settings
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
