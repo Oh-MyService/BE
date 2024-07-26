@@ -155,19 +155,25 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    if is_token_expired(token):
-        raise credentials_exception
+    
     try:
         payload = decode_access_token(token)
+        logging.debug(f"Decoded token payload: {payload}")
+        if payload is None:
+            raise credentials_exception
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
+    
     user = db.query(User).filter(User.username == username).first()
     if user is None:
         raise credentials_exception
+    
+    logging.debug(f"Authenticated user: {user.username}, ID: {user.id}")
     return user
+
 
 # redis
 def start_image_generation(prompt: str, task_id: str):
@@ -191,6 +197,7 @@ def create_prompt(content: str = Form(...), db: Session = Depends(get_db), curre
     except Exception as e:
         logging.error(f"Error creating prompt: {e}")
         raise HTTPException(status_code=500, detail=f"Error creating prompt: {e}")
+
 
 @app.get("/api/prompts/user/{user_id}")
 def get_user_prompts(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
