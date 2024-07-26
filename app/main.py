@@ -19,7 +19,7 @@ import redis
 from . import crud
 from .database import get_db, engine, SessionLocal
 from .models import User, Prompt, Result, Collection, CollectionResult
-from .utils import sqlalchemy_to_pydantic, create_access_token, decode_access_token
+from .utils import sqlalchemy_to_pydantic, create_access_token, decode_access_token, is_token_expired
 
 # Load environment variables
 load_dotenv()
@@ -140,6 +140,8 @@ def verify_token(token: str = Depends(oauth2_scheme)):
 
 @app.get("/verify-token/{token}")
 async def verify_user_token(token: str):
+    if is_token_expired(token):
+        raise HTTPException(status_code=403, detail="Token is expired")
     verify_token(token=token)
     return {"message": "Token is valid"}
 
@@ -149,6 +151,8 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    if is_token_expired(token):
+        raise credentials_exception
     try:
         payload = decode_access_token(token)
         username: str = payload.get("sub")
@@ -161,7 +165,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         raise credentials_exception
     return user
 
-
+# redis
 def start_image_generation(prompt: str, task_id: str):
     task_data = {"prompt": prompt, "task_id": task_id, "status": "queued"}
     redis_client.lpush("image_queue", json.dumps(task_data))
