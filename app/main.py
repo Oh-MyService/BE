@@ -80,7 +80,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # JWT secret and algorithm
 SECRET_KEY = os.getenv("SECRET_KEY", "your_secret_key")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 100000 # 나중에 수정 필요
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 # 나중에 수정 필요
 
 # user
 def get_user_by_username(db: Session, username: str):
