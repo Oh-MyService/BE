@@ -14,6 +14,7 @@ import logging
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
+import redis
 
 from . import crud
 from .database import get_db, engine, SessionLocal
@@ -27,6 +28,8 @@ load_dotenv()
 logging.basicConfig(level=logging.DEBUG)
 
 app = FastAPI()
+
+redis_client = redis.Redis(host='43.202.57.225', port=26262, db=0)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -154,6 +157,11 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
         return user
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+
+def start_image_generation(prompt: str, task_id: str):
+    task_data = {"prompt": prompt, "task_id": task_id, "status": "queued"}
+    redis_client.lpush("image_queue", json.dumps(task_data))
+    redis_client.set(task_id, json.dumps(task_data))
 
 @app.post("/api/prompts")
 def create_prompt(prompt_data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

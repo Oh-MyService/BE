@@ -9,12 +9,12 @@ services:
       - redis
     environment:
       - DATABASE_URL=mysql+pymysql://user:password@mysql_container:21212/mydatabase
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=redis://redis:26262
 
   redis:
     image: "redis:latest"
     ports:
-      - "6379:6379"
+      - "26262:6379"
     volumes:
       - redis_data:/data
 
