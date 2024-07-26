@@ -41,6 +41,7 @@ origins = [
     "http://43.202.57.225:25252",
     "http://inkyong.com",
     "https://inkyong.com",
+    "http://43.202.57.225:25252/create-image",
 ]
 
 app.add_middleware(
@@ -53,6 +54,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def add_cors_headers(request, call_next):
+    logging.debug(f"Request origin: {request.headers.get('origin')}")
     response = await call_next(request)
     origin = request.headers.get('origin')
     if origin in origins:
@@ -60,7 +62,8 @@ async def add_cors_headers(request, call_next):
     response.headers["Access-Control-Allow-Credentials"] = "true"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    return response
+    logging.debug(f"Response headers: {response.headers}")
+    return responsea
 
 # Google OAuth 관련
 CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
