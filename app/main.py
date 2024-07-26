@@ -76,7 +76,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # JWT secret and algorithm
 SECRET_KEY = os.getenv("SECRET_KEY", "your_secret_key")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 100000 # 나중에 수정 필요
 
 # user
 def get_user_by_username(db: Session, username: str):
@@ -143,14 +143,6 @@ async def verify_user_token(token: str):
     verify_token(token=token)
     return {"message": "Token is valid"}
 
-@app.get("/user_info")
-async def get_user_info(request: Request):
-    user_info = request.session.get('user_info')
-    if user_info:
-        return JSONResponse(content=user_info)
-    else:
-        raise HTTPException(status_code=401, detail="User not authenticated")
-
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -169,9 +161,6 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         raise credentials_exception
     return user
 
-@app.post("/secure-endpoint")
-def secure_endpoint(current_user: User = Depends(get_current_user)):
-    return {"message": "Secure data", "user": current_user.username}
 
 def start_image_generation(prompt: str, task_id: str):
     task_data = {"prompt": prompt, "task_id": task_id, "status": "queued"}
