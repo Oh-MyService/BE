@@ -321,7 +321,9 @@ def get_user_collections(user_id: int, db: Session = Depends(get_db), current_us
         logging.error("Not authorized to access this user's collections")
         raise HTTPException(status_code=403, detail="Not authorized to access this user's collections")
     try:
+        logging.debug(f"Fetching collections for user_id: {user_id}")
         collections = db.query(Collection).filter(Collection.user_id == user_id).all()
+        logging.debug(f"Fetched collections: {collections}")
         collection_list = [
             {
                 "id": collection.id,
@@ -335,7 +337,6 @@ def get_user_collections(user_id: int, db: Session = Depends(get_db), current_us
     except Exception as e:
         logging.error(f"Error fetching collections: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching collections: {e}")
-    
 
 # 소연언니 코드
 @app.post("/api/collections/{collection_id}/add_result")
