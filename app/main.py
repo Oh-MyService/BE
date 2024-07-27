@@ -43,6 +43,7 @@ origins = [
     "http://inkyong.com",
     "https://inkyong.com",
     "http://43.202.57.225:25252/create-image",
+    "http://43.202.57.225:25252/recent-generation",
 ]
 
 app.add_middleware(
