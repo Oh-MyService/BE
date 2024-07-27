@@ -317,9 +317,7 @@ def create_collection(collection_name: str = Form(...), db: Session = Depends(ge
 # 특정 user id에 대한 컬랙션 모두 보기
 @app.get("/api/collections/user/{user_id}")
 def get_user_collections(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    logging.debug(f"Fetching collections for user_id: {user_id}, current_user.id: {current_user.id}")
     if current_user.id != user_id:
-        logging.error("Not authorized to access this user's collections")
         raise HTTPException(status_code=403, detail="Not authorized to access this user's collections")
     try:
         collections = db.query(Collection).filter(Collection.user_id == user_id).all()
@@ -332,7 +330,6 @@ def get_user_collections(user_id: int, db: Session = Depends(get_db), current_us
             }
             for collection in collections
         ]
-        logging.debug(f"Fetched collections: {collection_list}")
         return collection_list
     except Exception as e:
         logging.error(f"Error fetching collections: {e}")
