@@ -2,7 +2,7 @@ from pydantic import BaseModel, create_model
 from sqlalchemy.orm import class_mapper
 import logging
 import jwt
-from jwt import ExpiredSignatureError, PyJWTError
+from jwt.exceptions import ExpiredSignatureError, PyJWTError
 from datetime import datetime, timedelta
 from typing import Optional
 import os

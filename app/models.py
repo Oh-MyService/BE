@@ -1,26 +1,29 @@
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import relationship, Session
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, MetaData
 import os
 from dotenv import load_dotenv
 
-# .env 파일에서 환경 변수 로드
+# Load environment variables
 load_dotenv()
 
-# .env 파일에서 DATABASE_URL 읽기
+# Read DATABASE_URL from .env file
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# DATABASE_URL 출력하여 확인
+# Print DATABASE_URL to verify it's loaded correctly
 print(f"DATABASE_URL: {DATABASE_URL}")
 
-# 데이터베이스 엔진 생성
+# Create database engine
 engine = create_engine(DATABASE_URL, echo=True)
 Base = automap_base()
 
-# 테이블 구조 반영
+# Reflect the tables
+metadata = MetaData()
+metadata.reflect(engine, only=['users', 'prompts', 'results', 'collections', 'collection_results'])
+
 Base.prepare(engine, reflect=True)
 
-# 자동으로 생성된 클래스들 가져오기
+# Automatically generated classes
 User = Base.classes.users
 Prompt = Base.classes.prompts
 Result = Base.classes.results

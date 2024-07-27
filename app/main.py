@@ -209,7 +209,7 @@ def get_user_prompts(user_id: int, db: Session = Depends(get_db), current_user: 
         return db.query(Prompt).filter(Prompt.user_id == user_id).all()
     except Exception as e:
         logging.error(f"Error fetching user prompts: {e}")
-        raise HTTPException(status_code=500, detail=f"Error fetching user prompts: {e}")
+        raise HTTPException.status_code(500, detail=f"Error fetching user prompts: {e}")
 
 # 특정 prompt id에 대한 프롬프트 보기
 @app.get("/api/prompts/{prompt_id}")
@@ -217,10 +217,10 @@ def get_prompt(prompt_id: int, db: Session = Depends(get_db), current_user: User
     try:
         prompt = crud.get_record(db=db, model=Prompt, record_id=prompt_id)
         if not prompt or prompt.user_id != current_user.id:
-            raise HTTPException(status_code=404, detail="Prompt not found or not authorized")
+            raise HTTPException.status_code(404, detail="Prompt not found or not authorized")
         return prompt
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching prompt: {e}")
+        raise HTTPException.status_code(500, detail=f"Error fetching prompt: {e}")
 
 
 ### results ###
@@ -235,7 +235,7 @@ async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...
         ResultResponse = sqlalchemy_to_pydantic(Result)
         return ResultResponse.from_orm(db_result)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error creating result: {e}")
+        raise HTTPException.status_code(500, detail=f"Error creating result: {e}")
 
 # 특정 prompt id에 대한 이미지 결과 모두 보기
 @app.get("/api/results/{prompt_id}")
@@ -243,33 +243,33 @@ def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_us
     try:
         prompt = crud.get_record(db=db, model=Prompt, record_id=prompt_id)
         if not prompt or prompt.user_id != current_user.id:
-            raise HTTPException(status_code=404, detail="Prompt not found or not authorized")
+            raise HTTPException.status_code(404, detail="Prompt not found or not authorized")
         results = db.query(Result).filter(Result.prompt_id == prompt_id).all()
         for result in results:
             result.image_data = base64.b64encode(result.image_data).decode('utf-8')
         return results
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching prompt results: {e}")
+        raise HTTPException.status_code(500, detail=f"Error fetching prompt results: {e}")
 
 # 특정 user id에 대한 이미지 결과 모두 보기
 @app.get("/api/results/user/{user_id}")
 def get_user_results(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.id != user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this user's results")
+        raise HTTPException.status_code(403, detail="Not authorized to access this user's results")
     try:
         results = db.query(Result).filter(Result.user_id == user_id).all()
         for result in results:
             result.image_data = base64.b64encode(result.image_data).decode('utf-8')
         return results
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching user results: {e}")
+        raise HTTPException.status_code(500, detail=f"Error fetching user results: {e}")
 
 # 최근 생성 삭제
 @app.delete("/api/results/{result_id}", status_code=status.HTTP_200_OK)
 def delete_result(result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = crud.get_record(db=db, model=Result, record_id=result_id)
     if not result or result.user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Result not found or not authorized")
+        raise HTTPException.status_code(404, detail="Result not found or not authorized")
     crud.delete_record(db=db, model=Result, record_id=result_id)
     return {"message": "Result deleted successfully"}
 
@@ -300,7 +300,7 @@ def get_user_results(request: Request, db: Session = Depends(get_db), current_us
             "collections": collections_data
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching user results and collections: {e}")
+        raise HTTPException.status_code(500, detail=f"Error fetching user results and collections: {e}")
 
 
 ### collections ###
@@ -312,13 +312,13 @@ def create_collection(collection_name: str = Form(...), db: Session = Depends(ge
         new_collection = crud.create_record(db=db, model=Collection, **collection_data)
         return {column.name: getattr(new_collection, column.name) for column in new_collection.__table__.columns}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error creating collection: {e}")
+        raise HTTPException.status_code(500, detail=f"Error creating collection: {e}")
 
 # 특정 user id에 대한 컬랙션 모두 보기
 @app.get("/api/collections/user/{user_id}")
 def get_user_collections(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.id != user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this user's collections")
+        raise HTTPException.status_code(403, detail="Not authorized to access this user's collections")
     try:
         collections = db.query(Collection).filter(Collection.user_id == user_id).all()
         collection_list = [
@@ -333,20 +333,22 @@ def get_user_collections(user_id: int, db: Session = Depends(get_db), current_us
         return collection_list
     except Exception as e:
         logging.error(f"Error fetching collections: {e}")
-        raise HTTPException(status_code=500, detail=f"Error fetching collections: {e}")    
+        raise HTTPException.status_code(500, detail=f"Error fetching collections: {e}")    
 
 # 소연언니 코드
 @app.post("/api/collections/{collection_id}/add_result")
 def add_result_to_collection(collection_id: int, result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if CollectionResult is None:
+        raise HTTPException(status_code=500, detail="Table 'collection_results' not found in the database.")
     collection = crud.get_record(db=db, model=Collection, record_id=collection_id)
     if not collection or collection.user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Collection not found or not authorized")
+        raise HTTPException.status_code(404, detail="Collection not found or not authorized")
     try:
         collection_result_data = {"collection_id": collection_id, "result_id": result_id}
         new_collection_result = crud.create_record(db=db, model=CollectionResult, **collection_result_data)
         return {column.name: getattr(new_collection_result, column.name) for column in new_collection_result.__table__.columns}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error adding result to collection: {e}")
+        raise HTTPException.status_code(500, detail=f"Error adding result to collection: {e}")
 
 @app.get("/api/user_collections")
 def get_user_collections(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -364,9 +366,7 @@ def get_user_collections(db: Session = Depends(get_db), current_user: User = Dep
 
         return collections_data
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching user collections: {e}")
-
-
+        raise HTTPException.status_code(500, detail=f"Error fetching user collections: {e}")
 
 if __name__ == "__main__":
     import uvicorn
