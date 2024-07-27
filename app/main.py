@@ -258,6 +258,15 @@ def get_user_results(user_id: int, db: Session = Depends(get_db), current_user: 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching user results: {e}")
 
+# 최근 생성 삭제
+@app.delete("/api/results/{result_id}", status_code=status.HTTP_200_OK)
+def delete_result(result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    result = crud.get_record(db=db, model=Result, record_id=result_id)
+    if not result or result.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Result not found or not authorized")
+    crud.delete_record(db=db, model=Result, record_id=result_id)
+    return {"message": "Result deleted successfully"}
+
 @app.get("/api/user_results")
 def get_user_results(request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
