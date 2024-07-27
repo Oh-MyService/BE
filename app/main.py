@@ -318,12 +318,15 @@ def create_collection(collection_name: str = Form(...), db: Session = Depends(ge
 @app.get("/api/collections/user/{user_id}")
 def get_user_collections(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.id != user_id:
-        logging.error("Not authorized to access this user's collections")
+        logging.error(f"User {current_user.id} not authorized to access collections of user {user_id}")
         raise HTTPException(status_code=403, detail="Not authorized to access this user's collections")
     try:
         logging.debug(f"Fetching collections for user_id: {user_id}")
         collections = db.query(Collection).filter(Collection.user_id == user_id).all()
         logging.debug(f"Fetched collections: {collections}")
+        if not collections:
+            logging.debug(f"No collections found for user_id: {user_id}")
+            return {"message": "No collections found"}
         collection_list = [
             {
                 "collection_id": collection.collection_id, 
@@ -333,10 +336,12 @@ def get_user_collections(user_id: int, db: Session = Depends(get_db), current_us
             }
             for collection in collections
         ]
+        logging.debug(f"Collection list to be returned: {collection_list}")
         return collection_list
     except Exception as e:
         logging.error(f"Error fetching collections: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching collections: {e}")
+
 
 
 # 소연언니 코드
