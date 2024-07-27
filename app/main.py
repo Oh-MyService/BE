@@ -329,7 +329,7 @@ def get_user_collections(user_id: int, db: Session = Depends(get_db), current_us
             return {"message": "No collections found"}
         collection_list = [
             {
-                "collection_id": collection.collection_id, 
+                "collection_id": collection.collection_id,
                 "user_id": collection.user_id,
                 "collection_name": collection.collection_name,
                 "created_at": collection.created_at.isoformat()
@@ -337,12 +337,10 @@ def get_user_collections(user_id: int, db: Session = Depends(get_db), current_us
             for collection in collections
         ]
         logging.debug(f"Collection list to be returned: {collection_list}")
-        return collection_list
+        return {"collection_list": collection_list}
     except Exception as e:
         logging.error(f"Error fetching collections: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching collections: {e}")
-
-
 
 # 소연언니 코드
 @app.post("/api/collections/{collection_id}/add_result")
