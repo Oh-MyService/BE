@@ -43,7 +43,6 @@ origins = [
     "http://inkyong.com",
     "https://inkyong.com",
     "http://43.202.57.225:25252/create-image",
-    "http://43.202.57.225:25252/recent-generation",
 ]
 
 app.add_middleware(
@@ -319,7 +318,8 @@ def create_collection(collection_name: str = Form(...), db: Session = Depends(ge
 @app.get("/api/collections/user/{user_id}")
 def get_user_collections(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.id != user_id:
-        raise HTTPException.status_code(403, detail="Not authorized to access this user's collections")
+        logging.error("Not authorized to access this user's collections")
+        raise HTTPException(status_code=403, detail="Not authorized to access this user's collections")
     try:
         collections = db.query(Collection).filter(Collection.user_id == user_id).all()
         collection_list = [
@@ -334,7 +334,8 @@ def get_user_collections(user_id: int, db: Session = Depends(get_db), current_us
         return collection_list
     except Exception as e:
         logging.error(f"Error fetching collections: {e}")
-        raise HTTPException.status_code(500, detail=f"Error fetching collections: {e}")    
+        raise HTTPException(status_code=500, detail=f"Error fetching collections: {e}")
+    
 
 # 소연언니 코드
 @app.post("/api/collections/{collection_id}/add_result")
