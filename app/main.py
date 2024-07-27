@@ -66,7 +66,7 @@ async def add_cors_headers(request, call_next):
     logging.debug(f"Response headers: {response.headers}")
     return response
 
-# Google OAuth 관련
+# Google OAuth 관련 -> 필요없는 부분 삭제하기
 CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://inkyong.com/auth")
@@ -82,7 +82,7 @@ SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 # 나중에 수정 필요
 
-# user
+### users ###
 def get_user_by_username(db: Session, username: str):
     return db.query(User).filter(User.username == username).first()
 
@@ -182,7 +182,8 @@ def start_image_generation(prompt: str, task_id: str):
     redis_client.set(task_id, json.dumps(task_data))
 
 
-# prompt 
+### prompts ###
+# prompt 입력하기
 @app.post("/api/prompts")
 def create_prompt(content: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     logging.debug(f"Received request to create prompt with content: {content} for user ID: {current_user.id}")
@@ -198,7 +199,7 @@ def create_prompt(content: str = Form(...), db: Session = Depends(get_db), curre
         logging.error(f"Error creating prompt: {e}")
         raise HTTPException(status_code=500, detail=f"Error creating prompt: {e}")
 
-
+# 특정 user id에 대한 프롬프트 모두 보기
 @app.get("/api/prompts/user/{user_id}")
 def get_user_prompts(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.id != user_id:
@@ -210,6 +211,7 @@ def get_user_prompts(user_id: int, db: Session = Depends(get_db), current_user: 
         logging.error(f"Error fetching user prompts: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching user prompts: {e}")
 
+# 특정 prompt id에 대한 프롬프트 보기
 @app.get("/api/prompts/{prompt_id}")
 def get_prompt(prompt_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
@@ -220,7 +222,9 @@ def get_prompt(prompt_id: int, db: Session = Depends(get_db), current_user: User
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching prompt: {e}")
 
-# result
+
+### results ###
+# result 올리기 -> 테스트용 
 @app.post("/api/results")
 async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
@@ -233,6 +237,7 @@ async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating result: {e}")
 
+# 특정 prompt id에 대한 이미지 결과 모두 보기
 @app.get("/api/results/{prompt_id}")
 def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
@@ -246,6 +251,7 @@ def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_us
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching prompt results: {e}")
 
+# 특정 user id에 대한 이미지 결과 모두 보기
 @app.get("/api/results/user/{user_id}")
 def get_user_results(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.id != user_id:
@@ -267,6 +273,7 @@ def delete_result(result_id: int, db: Session = Depends(get_db), current_user: U
     crud.delete_record(db=db, model=Result, record_id=result_id)
     return {"message": "Result deleted successfully"}
 
+# 소연언니 코드
 @app.get("/api/user_results")
 def get_user_results(request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
@@ -295,6 +302,9 @@ def get_user_results(request: Request, db: Session = Depends(get_db), current_us
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching user results and collections: {e}")
 
+
+### collections ###
+# 컬랙션 만들기
 @app.post("/api/collections")
 def create_collection(collection_name: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
@@ -304,6 +314,28 @@ def create_collection(collection_name: str = Form(...), db: Session = Depends(ge
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating collection: {e}")
 
+# 특정 user id에 대한 컬랙션 모두 보기
+@app.get("/api/collections/user/{user_id}")
+def get_user_collections(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this user's collections")
+    try:
+        collections = db.query(Collection).filter(Collection.user_id == user_id).all()
+        collection_list = [
+            {
+                "id": collection.id,
+                "user_id": collection.user_id,
+                "collection_name": collection.collection_name,
+                "created_at": collection.created_at.isoformat()
+            }
+            for collection in collections
+        ]
+        return collection_list
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching collections: {e}")
+    
+
+# 소연언니 코드
 @app.post("/api/collections/{collection_id}/add_result")
 def add_result_to_collection(collection_id: int, result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     collection = crud.get_record(db=db, model=Collection, record_id=collection_id)
@@ -333,6 +365,8 @@ def get_user_collections(db: Session = Depends(get_db), current_user: User = Dep
         return collections_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching user collections: {e}")
+
+
 
 if __name__ == "__main__":
     import uvicorn
