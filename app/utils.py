@@ -2,7 +2,6 @@ from pydantic import BaseModel, create_model
 from sqlalchemy.orm import class_mapper
 import logging
 import jwt
-from jwt.exceptions import ExpiredSignatureError, PyJWTError
 from datetime import datetime, timedelta
 from typing import Optional
 import os
@@ -14,30 +13,34 @@ ALGORITHM = "HS256"
 
 logging.basicConfig(level=logging.DEBUG)
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
         expire = datetime.utcnow() + timedelta(minutes=15)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    logging.debug(f"JWT Token created: {encoded_jwt}")
-    return encoded_jwt
+    try:
+        encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+        logging.debug(f"JWT Token created: {encoded_jwt}")
+        return encoded_jwt
+    except Exception as e:
+        logging.error(f"Error encoding JWT token: {e}")
+        raise
 
-def decode_access_token(token: str):
+def decode_access_token(token: str) -> dict:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         logging.debug(f"JWT Token decoded: {payload}")
         return payload
-    except ExpiredSignatureError:
-        logging.error("JWT Token expired")
-        return None
-    except PyJWTError:
-        logging.error("JWT Token error")
-        return None
+    except jwt.ExpiredSignatureError:
+        logging.error("JWT Token has expired")
+        raise
+    except jwt.InvalidTokenError:
+        logging.error("Invalid JWT Token")
+        raise
 
-def is_token_expired(token: str):
+def is_token_expired(token: str) -> bool:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         exp = payload.get("exp")
@@ -46,18 +49,19 @@ def is_token_expired(token: str):
             return True
         logging.debug("JWT Token is not expired")
         return False
-    except ExpiredSignatureError:
+    except jwt.ExpiredSignatureError:
         logging.debug("JWT Token is expired")
         return True
-    except PyJWTError:
-        logging.debug("JWT Token is invalid")
+    except jwt.InvalidTokenError:
+        logging.error("Invalid JWT Token")
         return True
 
-def sqlalchemy_to_pydantic(model, name=None):
+def sqlalchemy_to_pydantic(model, name: Optional[str] = None) -> BaseModel:
     mapper = class_mapper(model)
     fields = {
         column.key: (column.type.python_type, ...)
         for column in mapper.columns
     }
     pydantic_model = create_model(name or model.__name__, **fields)
+    logging.debug(f"Pydantic model created: {pydantic_model}")
     return pydantic_model

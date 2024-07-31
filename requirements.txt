@@ -9,7 +9,7 @@ httpx
 python-multipart
 aiofiles
 jinja2
-PyJWT
+pyjwt
 
 jose
 bcrypt

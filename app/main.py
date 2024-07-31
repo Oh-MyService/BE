@@ -67,12 +67,12 @@ async def add_cors_headers(request, call_next):
     return response
 
 # Google OAuth 관련 -> 필요없는 부분 삭제하기
-CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://inkyong.com/auth")
-AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/auth"
-TOKEN_URL = "https://oauth2.googleapis.com/token"
-USER_INFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
+# CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+# CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+# REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://inkyong.com/auth")
+# AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/auth"
+# TOKEN_URL = "https://oauth2.googleapis.com/token"
+# USER_INFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -174,22 +174,11 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     logging.debug(f"Authenticated user: {user.username}, ID: {user.id}")
     return user
 
-
-# redis
-def start_image_generation(prompt: str, task_id: str):
-    task_data = {"prompt": prompt, "task_id": task_id, "status": "queued"}
-    redis_client.lpush("image_queue", json.dumps(task_data))
-    redis_client.set(task_id, json.dumps(task_data))
-
-
 ### prompts ###
 # prompt 입력하기
 @app.post("/api/prompts")
 def create_prompt(content: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     logging.debug(f"Received request to create prompt with content: {content} for user ID: {current_user.id}")
-    db_prompt = db.query(Prompt).filter(Prompt.content == content).first()
-    if db_prompt:
-        raise HTTPException(status_code=400, detail="Prompt already exists")
     try:
         prompt_data = {"content": content, "user_id": current_user.id, "created_at": datetime.now()}
         new_prompt = crud.create_record(db=db, model=Prompt, **prompt_data)
@@ -342,38 +331,77 @@ def get_user_collections(user_id: int, db: Session = Depends(get_db), current_us
         logging.error(f"Error fetching collections: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching collections: {e}")
 
-# 소연언니 코드
+# 특정 이미지 컬랙션에 추가
 @app.post("/api/collections/{collection_id}/add_result")
 def add_result_to_collection(collection_id: int, result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if CollectionResult is None:
-        raise HTTPException(status_code=500, detail="Table 'collection_results' not found in the database.")
     collection = crud.get_record(db=db, model=Collection, record_id=collection_id)
     if not collection or collection.user_id != current_user.id:
-        raise HTTPException.status_code(404, detail="Collection not found or not authorized")
+        raise HTTPException(status_code=404, detail="Collection not found or not authorized")
     try:
         collection_result_data = {"collection_id": collection_id, "result_id": result_id}
         new_collection_result = crud.create_record(db=db, model=CollectionResult, **collection_result_data)
         return {column.name: getattr(new_collection_result, column.name) for column in new_collection_result.__table__.columns}
     except Exception as e:
-        raise HTTPException.status_code(500, detail=f"Error adding result to collection: {e}")
+        raise HTTPException(status_code=500, detail=f"Error adding result to collection: {e}")
 
-@app.get("/api/user_collections")
-def get_user_collections(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+# 컬랙션 목록 불러오기 -> 아카이브    
+@app.get("/api/collections/user/{user_id}")
+def get_user_collections(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this user's collections")
     try:
-        user_id = current_user.id
         collections = db.query(Collection).filter(Collection.user_id == user_id).all()
-
-        if not collections:
-            return [{"message": "컬렉션이 비었습니다"}]
-
-        collections_data = []
+        collection_list = []
         for collection in collections:
-            collection_dict = {column.name: getattr(collection, column.name) for column in collection.__table__.columns}
-            collections_data.append(collection_dict)
-
-        return collections_data
+            collection_data = {column.name: getattr(collection, column.name) for column in collection.__table__.columns}
+            collection_results = db.query(CollectionResult).filter(CollectionResult.collection_id == collection.collection_id).all()
+            images = []
+            for collection_result in collection_results:
+                result = db.query(Result).filter(Result.result_id == collection_result.result_id).first()
+                if result:
+                    result_data = {column.name: getattr(result, column.name) for column in result.__table__.columns}
+                    result_data["image_data"] = base64.b64encode(result.image_data).decode('utf-8')
+                    images.append(result_data)
+            collection_data["images"] = images
+            collection_list.append(collection_data)
+        return {"collection_list": collection_list}
     except Exception as e:
-        raise HTTPException.status_code(500, detail=f"Error fetching user collections: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching collections: {e}")
+    
+
+ # 해당 컬렉션 눌렀을 때 이미지 불러오기
+@app.get("/api/collections/{collection_id}/images")
+def get_collection_images(collection_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    collection = crud.get_record(db=db, model=Collection, record_id=collection_id)
+    if not collection or collection.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Collection not found or not authorized")
+    try:
+        collection_results = db.query(CollectionResult).filter(CollectionResult.collection_id == collection_id).all()
+        images = []
+        for collection_result in collection_results:
+            result = db.query(Result).filter(Result.result_id == collection_result.result_id).first()
+            if result:
+                result_data = {column.name: getattr(result, column.name) for column in result.__table__.columns}
+                result_data["image_data"] = base64.b64encode(result.image_data).decode('utf-8')
+                images.append(result_data)
+        return {"images": images}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching collection images: {e}")
+
+
+# 컬랙션 삭제
+@app.delete("/api/collections/{collection_id}", status_code=status.HTTP_200_OK)
+def delete_collection(collection_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    collection = crud.get_record(db=db, model=Collection, record_id=collection_id)
+    if not collection or collection.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Collection not found or not authorized")
+    try:
+        crud.delete_record(db=db, model=Collection, record_id=collection_id)
+        return {"message": "Collection deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting collection: {e}")
+
+
 
 if __name__ == "__main__":
     import uvicorn
