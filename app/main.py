@@ -42,7 +42,6 @@ origins = [
     "http://43.202.57.225:25252",
     "http://inkyong.com",
     "https://inkyong.com",
-    "http://43.202.57.225:25252/create-image",
 ]
 
 app.add_middleware(
@@ -391,21 +390,27 @@ def get_user_collections(user_id: int, db: Session = Depends(get_db), current_us
  # 해당 컬렉션 눌렀을 때 이미지 불러오기
 @app.get("/api/collections/{collection_id}/images")
 def get_collection_images(collection_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    collection = crud.get_record(db=db, model=Collection, record_id=collection_id)
-    if not collection or collection.user_id != current_user.id:
+    # Ensure the user owns the collection
+    collection = db.query(Collection).filter(Collection.collection_id == collection_id, Collection.user_id == current_user.id).first()
+    if not collection:
         raise HTTPException(status_code=404, detail="Collection not found or not authorized")
+    
     try:
+        # Fetch collection results
         collection_results = db.query(CollectionResult).filter(CollectionResult.collection_id == collection_id).all()
         images = []
+        
+        # Fetch and decode image data for each result
         for collection_result in collection_results:
             result = db.query(Result).filter(Result.result_id == collection_result.result_id).first()
             if result:
                 result_data = {column.name: getattr(result, column.name) for column in result.__table__.columns}
                 result_data["image_data"] = base64.b64encode(result.image_data).decode('utf-8')
                 images.append(result_data)
+                
         return {"images": images}
     except Exception as e:
-        raise HTTPException.status_code(500, detail=f"Error fetching collection images: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching collection images: {e}")
 
 
 # 컬랙션 삭제

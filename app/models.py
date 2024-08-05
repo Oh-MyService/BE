@@ -1,5 +1,6 @@
+# models.py
 from sqlalchemy.ext.automap import automap_base
-from sqlalchemy.orm import relationship, Session
+from sqlalchemy.orm import relationship
 from sqlalchemy import create_engine, MetaData
 import os
 from dotenv import load_dotenv
@@ -9,9 +10,6 @@ load_dotenv()
 
 # Read DATABASE_URL from .env file
 DATABASE_URL = os.getenv("DATABASE_URL")
-
-# Print DATABASE_URL to verify it's loaded correctly
-print(f"DATABASE_URL: {DATABASE_URL}")
 
 # Create database engine
 engine = create_engine(DATABASE_URL, echo=True)
