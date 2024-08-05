@@ -392,26 +392,36 @@ def get_user_collections(user_id: int, db: Session = Depends(get_db), current_us
  # 해당 컬렉션 눌렀을 때 이미지 불러오기
 @app.get("/api/collections/{collection_id}/images")
 def get_collection_images(collection_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    # Ensure the user owns the collection
-    collection = db.query(Collection).filter(Collection.collection_id == collection_id, Collection.user_id == current_user.id).first()
-    if not collection:
-        raise HTTPException(status_code=404, detail="Collection not found or not authorized")
-    
     try:
+        # Ensure the user owns the collection
+        logging.debug(f"Fetching collection with ID: {collection_id} for user ID: {current_user.id}")
+        collection = db.query(Collection).filter(Collection.collection_id == collection_id, Collection.user_id == current_user.id).first()
+        if not collection:
+            logging.error(f"Collection not found or not authorized: collection_id={collection_id}, user_id={current_user.id}")
+            raise HTTPException(status_code=404, detail="Collection not found or not authorized")
+
         # Fetch collection results
+        logging.debug(f"Fetching collection results for collection ID: {collection_id}")
         collection_results = db.query(CollectionResult).filter(CollectionResult.collection_id == collection_id).all()
         images = []
-        
+
         # Fetch and decode image data for each result
         for collection_result in collection_results:
+            logging.debug(f"Fetching result with ID: {collection_result.result_id}")
             result = db.query(Result).filter(Result.result_id == collection_result.result_id).first()
             if result:
                 result_data = {column.name: getattr(result, column.name) for column in result.__table__.columns}
                 result_data["image_data"] = base64.b64encode(result.image_data).decode('utf-8')
                 images.append(result_data)
-                
+            else:
+                logging.error(f"Result not found: result_id={collection_result.result_id}")
+        
         return {"images": images}
+    except HTTPException as e:
+        logging.error(f"HTTP Exception: {e.detail}")
+        raise e
     except Exception as e:
+        logging.error(f"Unexpected error fetching collection images: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching collection images: {e}")
 
 
