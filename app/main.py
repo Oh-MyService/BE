@@ -409,6 +409,9 @@ def get_collection_images(collection_id: int, db: Session = Depends(get_db), cur
         for collection_result in collection_results:
             logging.debug(f"Fetching result with ID: {collection_result.result_id}")
             result = db.query(Result).filter(Result.result_id == collection_result.result_id).first()
+            if not result:
+                result = db.query(Result).filter(Result.id == collection_result.result_id).first()
+            
             if result:
                 result_data = {column.name: getattr(result, column.name) for column in result.__table__.columns}
                 result_data["image_data"] = base64.b64encode(result.image_data).decode('utf-8')
