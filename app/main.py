@@ -350,7 +350,7 @@ def add_result_to_collection(collection_id: int, result_id: int = Form(...), db:
     if not collection or collection.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Collection not found or not authorized")
 
-    result = db.query(Result).filter(Result.result_id == result_id).first()
+    result = db.query(Result).filter(Result.id == result_id).first()  # Change here
     if not result or result.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Result not found or not authorized")
 
