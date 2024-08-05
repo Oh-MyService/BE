@@ -66,21 +66,13 @@ async def add_cors_headers(request, call_next):
     logging.debug(f"Response headers: {response.headers}")
     return response
 
-# Google OAuth 관련 -> 필요없는 부분 삭제하기
-# CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-# CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-# REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://inkyong.com/auth")
-# AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/auth"
-# TOKEN_URL = "https://oauth2.googleapis.com/token"
-# USER_INFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
-
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # JWT secret and algorithm
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 # 나중에 수정 필요
+ACCESS_TOKEN_EXPIRE_MINUTES = 60  # 나중에 수정 필요
 
 ### users ###
 def get_user_by_username(db: Session, username: str):
@@ -262,7 +254,7 @@ def delete_result(result_id: int, db: Session = Depends(get_db), current_user: U
     crud.delete_record(db=db, model=Result, record_id=result_id)
     return {"message": "Result deleted successfully"}
 
-# 소연언니 코드
+# 소연언니 코드 ??
 @app.get("/api/user_results")
 def get_user_results(request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
@@ -295,13 +287,34 @@ def get_user_results(request: Request, db: Session = Depends(get_db), current_us
 ### collections ###
 # 컬랙션 만들기
 @app.post("/api/collections")
-def create_collection(collection_name: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_collection_endpoint(collection_name: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
-        collection_data = {"created_at": datetime.now(), "user_id": current_user.id, "collection_name": collection_name}
-        new_collection = crud.create_record(db=db, model=Collection, **collection_data)
-        return {column.name: getattr(new_collection, column.name) for column in new_collection.__table__.columns}
+        # Create a new collection
+        new_collection = Collection(
+            created_at=datetime.now(),
+            user_id=current_user.id,
+            collection_name=collection_name
+        )
+        db.add(new_collection)
+        db.commit()
+        db.refresh(new_collection)
+
+        # Create a corresponding entry in collection_results with result_id as null
+        new_collection_result = CollectionResult(
+            collection_id=new_collection.collection_id,
+            result_id=None
+        )
+        db.add(new_collection_result)
+        db.commit()
+        db.refresh(new_collection_result)
+
+        return {
+            "collection": {column.name: getattr(new_collection, column.name) for column in new_collection.__table__.columns},
+            "collection_result": {column.name: getattr(new_collection_result, column.name) for column in new_collection_result.__table__.columns}
+        }
     except Exception as e:
-        raise HTTPException.status_code(500, detail=f"Error creating collection: {e}")
+        logging.error(f"Error creating collection: {e}")
+        raise HTTPException(status_code=500, detail=f"Error creating collection: {e}")
 
 # 특정 user id에 대한 컬랙션 모두 보기
 @app.get("/api/collections/user/{user_id}")
@@ -334,14 +347,20 @@ def get_user_collections(user_id: int, db: Session = Depends(get_db), current_us
 # 특정 이미지 컬랙션에 추가
 @app.post("/api/collections/{collection_id}/add_result")
 def add_result_to_collection(collection_id: int, result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    collection = crud.get_record(db=db, model=Collection, record_id=collection_id)
+    collection = db.query(Collection).filter(Collection.collection_id == collection_id).first()
     if not collection or collection.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Collection not found or not authorized")
     try:
-        collection_result_data = {"collection_id": collection_id, "result_id": result_id}
-        new_collection_result = crud.create_record(db=db, model=CollectionResult, **collection_result_data)
-        return {column.name: getattr(new_collection_result, column.name) for column in new_collection_result.__table__.columns}
+        collection_result = CollectionResult(
+            collection_id=collection_id,
+            result_id=result_id
+        )
+        db.add(collection_result)
+        db.commit()
+        db.refresh(collection_result)
+        return {column.name: getattr(collection_result, column.name) for column in collection_result.__table__.columns}
     except Exception as e:
+        logging.error(f"Error adding result to collection: {e}")
         raise HTTPException(status_code=500, detail=f"Error adding result to collection: {e}")
 
 # 컬랙션 목록 불러오기 -> 아카이브    
@@ -366,7 +385,7 @@ def get_user_collections(user_id: int, db: Session = Depends(get_db), current_us
             collection_list.append(collection_data)
         return {"collection_list": collection_list}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching collections: {e}")
+        raise HTTPException.status_code(500, detail=f"Error fetching collections: {e}")
     
 
  # 해당 컬렉션 눌렀을 때 이미지 불러오기
@@ -386,22 +405,23 @@ def get_collection_images(collection_id: int, db: Session = Depends(get_db), cur
                 images.append(result_data)
         return {"images": images}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching collection images: {e}")
+        raise HTTPException.status_code(500, detail=f"Error fetching collection images: {e}")
 
 
 # 컬랙션 삭제
 @app.delete("/api/collections/{collection_id}", status_code=status.HTTP_200_OK)
 def delete_collection(collection_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    collection = crud.get_record(db=db, model=Collection, record_id=collection_id)
+    collection = db.query(Collection).filter(Collection.collection_id == collection_id).first()
     if not collection or collection.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Collection not found or not authorized")
     try:
-        crud.delete_record(db=db, model=Collection, record_id=collection_id)
+        db.query(CollectionResult).filter(CollectionResult.collection_id == collection_id).delete()
+        db.query(Collection).filter(Collection.collection_id == collection_id).delete()
+        db.commit()
         return {"message": "Collection deleted successfully"}
     except Exception as e:
+        logging.error(f"Error deleting collection: {e}")
         raise HTTPException(status_code=500, detail=f"Error deleting collection: {e}")
-
-
 
 if __name__ == "__main__":
     import uvicorn
