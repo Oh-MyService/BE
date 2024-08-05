@@ -345,23 +345,25 @@ def get_user_collections(user_id: int, db: Session = Depends(get_db), current_us
 
 # 특정 이미지 컬랙션에 추가
 @app.post("/api/collections/{collection_id}/add_result")
-def add_result_to_collection(collection_id: int, result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def add_result_to_collection(collection_id: int, result_id: int = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     collection = db.query(Collection).filter(Collection.collection_id == collection_id).first()
     if not collection or collection.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Collection not found or not authorized")
+    
+    result = db.query(Result).filter(Result.result_id == result_id).first()
+    if not result or result.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Result not found or not authorized")
+    
     try:
-        collection_result = CollectionResult(
-            collection_id=collection_id,
-            result_id=result_id
-        )
-        db.add(collection_result)
+        new_collection_result = CollectionResult(collection_id=collection_id, result_id=result_id)
+        db.add(new_collection_result)
         db.commit()
-        db.refresh(collection_result)
-        return {column.name: getattr(collection_result, column.name) for column in collection_result.__table__.columns}
+        db.refresh(new_collection_result)
+        return {column.name: getattr(new_collection_result, column.name) for column in new_collection_result.__table__.columns}
     except Exception as e:
         logging.error(f"Error adding result to collection: {e}")
         raise HTTPException(status_code=500, detail=f"Error adding result to collection: {e}")
-
+    
 # 컬랙션 목록 불러오기 -> 아카이브    
 @app.get("/api/collections/user/{user_id}")
 def get_user_collections(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
