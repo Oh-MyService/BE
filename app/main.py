@@ -393,19 +393,24 @@ def get_user_collections(user_id: int, db: Session = Depends(get_db), current_us
  # 해당 컬렉션 눌렀을 때 이미지 불러오기
 @app.get("/api/collections/{collection_id}/images")
 def get_collection_images(collection_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    logging.debug(f"Fetching images for collection_id: {collection_id} by user_id: {current_user.id}")
+
     # Ensure the user owns the collection
     collection = db.query(Collection).filter(Collection.collection_id == collection_id, Collection.user_id == current_user.id).first()
     if not collection:
+        logging.error(f"Collection not found or not authorized for user_id: {current_user.id}")
         raise HTTPException(status_code=404, detail="Collection not found or not authorized")
     
     try:
         # Fetch collection results
         collection_results = db.query(CollectionResult).filter(CollectionResult.collection_id == collection_id).all()
+        logging.debug(f"Collection results: {collection_results}")
         images = []
         
         # Fetch and decode image data for each result
         for collection_result in collection_results:
-            result = db.query(Result).filter(Result.result_id == collection_result.result_id).first()
+            result = db.query(Result).filter(Result.id == collection_result.result_id).first()
+            logging.debug(f"Fetched result: {result}")
             if result:
                 result_data = {column.name: getattr(result, column.name) for column in result.__table__.columns}
                 result_data["image_data"] = base64.b64encode(result.image_data).decode('utf-8')
@@ -413,7 +418,9 @@ def get_collection_images(collection_id: int, db: Session = Depends(get_db), cur
                 
         return {"images": images}
     except Exception as e:
+        logging.error(f"Error fetching collection images: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching collection images: {e}")
+
 
 # 컬랙션 삭제
 @app.delete("/api/collections/{collection_id}", status_code=status.HTTP_200_OK)
