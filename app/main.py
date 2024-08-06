@@ -249,9 +249,10 @@ def get_user_results(user_id: int, db: Session = Depends(get_db), current_user: 
 def delete_result(result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = crud.get_record(db=db, model=Result, record_id=result_id)
     if not result or result.user_id != current_user.id:
-        raise HTTPException.status_code(404, detail="Result not found or not authorized")
+        raise HTTPException(status_code=404, detail="Result not found or not authorized")
     crud.delete_record(db=db, model=Result, record_id=result_id)
     return {"message": "Result deleted successfully"}
+
 
 # 소연언니 코드 ??
 @app.get("/api/user_results")
@@ -444,6 +445,19 @@ def update_collection_name(collection_id: int, new_name: str = Form(...), db: Se
         raise HTTPException(status_code=404, detail="Collection not found or not authorized")
     crud.update_record(db=db, model=Collection, record_id=collection_id, collection_name=new_name)
     return {"message": "Collection name updated successfully"}
+
+
+# 컬렉션 안에 있는 이미지 삭제
+@app.delete("/api/collection_results/{collection_result_id}", status_code=status.HTTP_200_OK)
+def delete_collection_result(collection_result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    collection_result = crud.get_record(db=db, model=CollectionResult, record_id=collection_result_id)
+    if not collection_result:
+        raise HTTPException(status_code=404, detail="CollectionResult not found")
+    collection = crud.get_record(db=db, model=Collection, record_id=collection_result.collection_id)
+    if not collection or collection.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this collection result")
+    crud.delete_record(db=db, model=CollectionResult, record_id=collection_result_id)
+    return {"message": "Collection result deleted successfully"}
 
 if __name__ == "__main__":
     import uvicorn
