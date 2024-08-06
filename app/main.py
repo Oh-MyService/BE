@@ -250,10 +250,6 @@ def delete_result(result_id: int, db: Session = Depends(get_db), current_user: U
     result = crud.get_record(db=db, model=Result, record_id=result_id)
     if not result or result.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Result not found or not authorized")
-    
-    # CollectionResult에서 해당 result_id를 NULL로 설정
-    db.query(CollectionResult).filter(CollectionResult.result_id == result_id).update({CollectionResult.result_id: None})
-    db.commit()
 
     # 결과 삭제 (CollectionResult는 영향을 받지 않음)
     crud.delete_record(db=db, model=Result, record_id=result_id)
