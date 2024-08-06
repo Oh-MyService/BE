@@ -298,7 +298,6 @@ def create_collection_endpoint(collection_name: str = Form(...), db: Session = D
         db.commit()
         db.refresh(new_collection)
 
-        # Create a corresponding entry in collection_results with result_id as null
         new_collection_result = CollectionResult(
             collection_id=new_collection.collection_id,
             result_id=None
@@ -350,7 +349,7 @@ def add_result_to_collection(collection_id: int, result_id: int = Form(...), db:
     if not collection or collection.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Collection not found or not authorized")
 
-    result = db.query(Result).filter(Result.id == result_id).first()  # Change here
+    result = db.query(Result).filter(Result.id == result_id).first() 
     if not result or result.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Result not found or not authorized")
 
@@ -436,6 +435,15 @@ def delete_collection(collection_id: int, db: Session = Depends(get_db), current
     except Exception as e:
         logging.error(f"Error deleting collection: {e}")
         raise HTTPException(status_code=500, detail=f"Error deleting collection: {e}")
+
+# 컬랙션 이름 변경
+@app.put("/api/collections/{collection_id}", status_code=status.HTTP_200_OK)
+def update_collection_name(collection_id: int, new_name: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    collection = crud.get_record(db=db, model=Collection, record_id=collection_id)
+    if not collection or collection.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Collection not found or not authorized")
+    crud.update_record(db=db, model=Collection, record_id=collection_id, collection_name=new_name)
+    return {"message": "Collection name updated successfully"}
 
 if __name__ == "__main__":
     import uvicorn
