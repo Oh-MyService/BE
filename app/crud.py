@@ -20,5 +20,6 @@ def update_record(db: Session, model, record_id: int, **kwargs):
 
 # 레코드 삭제 함수
 def delete_record(db: Session, model, record_id: int):
-    db.query(model).filter(model.id == record_id).delete()
+    primary_key_column = getattr(model, 'collection_id', 'id')  
+    db.query(model).filter(primary_key_column == record_id).delete()
     db.commit()
