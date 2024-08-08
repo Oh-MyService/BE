@@ -338,10 +338,15 @@ def add_result_to_collection(collection_id: int, result_id: int = Form(...), db:
         db.add(new_collection_result)
         db.commit()
         db.refresh(new_collection_result)
-        return {column.name: getattr(new_collection_result, column.name) for column in new_collection_result.__table__.columns}
+        return {
+            "collection_result_id": new_collection_result.id,
+            "collection_id": new_collection_result.collection_id,
+            "result_id": new_collection_result.result_id
+        }
     except Exception as e:
         logging.error(f"Error adding result to collection: {e}")
         raise HTTPException(status_code=500, detail=f"Error adding result to collection: {e}")
+
     
 # 컬랙션 목록 불러오기 -> 아카이브    
 @app.get("/api/collections/user/{user_id}")
@@ -426,14 +431,13 @@ def delete_collection_result(collection_result_id: int, db: Session = Depends(ge
     collection_result = crud.get_record(db=db, model=CollectionResult, record_id=collection_result_id)
     if not collection_result:
         raise HTTPException(status_code=404, detail="CollectionResult not found")
-
-    # collection_id를 검색합니다.
     collection = db.query(Collection).filter(Collection.collection_id == collection_result.collection_id).first()
     if not collection or collection.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this collection result")
 
     crud.delete_record(db=db, model=CollectionResult, record_id=collection_result_id)
     return {"message": "Collection result deleted successfully"}
+
 
 if __name__ == "__main__":
     import uvicorn
