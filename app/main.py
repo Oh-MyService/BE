@@ -421,29 +421,17 @@ def update_collection_name(collection_id: int, new_name: str = Form(...), db: Se
     return {"message": "Collection name updated successfully"}
 
 # 컬렉션 안에 있는 이미지 삭제
-@app.delete("/api/collection_results/result/{result_id}", status_code=status.HTTP_200_OK)
-def delete_collection_result_by_result_id(result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    # result_id를 사용하여 CollectionResult 조회
-    collection_result = db.query(CollectionResult).filter(CollectionResult.result_id == result_id).first()
-    
+@app.delete("/api/collection_results/{collection_result_id}", status_code=status.HTTP_200_OK)
+def delete_collection_result(collection_result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    collection_result = crud.get_record(db=db, model=CollectionResult, record_id=collection_result_id)
     if not collection_result:
         raise HTTPException(status_code=404, detail="CollectionResult not found")
-    
-    # collection_id를 검색하여 사용자 권한 확인
-    collection = db.query(Collection).filter(Collection.collection_id == collection_result.collection_id).first()
-    if not collection or collection.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to delete this collection result")
-    
-    # CollectionResult 삭제
-    crud.delete_record(db=db, model=CollectionResult, record_id=collection_result.id)
-    return {"message": "Collection result deleted successfully"}
 
-    
     # collection_id를 검색합니다.
     collection = db.query(Collection).filter(Collection.collection_id == collection_result.collection_id).first()
     if not collection or collection.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this collection result")
-    
+
     crud.delete_record(db=db, model=CollectionResult, record_id=collection_result_id)
     return {"message": "Collection result deleted successfully"}
 
