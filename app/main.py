@@ -420,13 +420,13 @@ def update_collection_name(collection_id: int, new_name: str = Form(...), db: Se
     crud.update_record(db=db, model=Collection, record_id=collection_id, collection_name=new_name)
     return {"message": "Collection name updated successfully"}
 
-
 # 컬렉션 안에 있는 이미지 삭제
 @app.delete("/api/collection_results/{collection_result_id}", status_code=status.HTTP_200_OK)
 def delete_collection_result(collection_result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     collection_result = crud.get_record(db=db, model=CollectionResult, record_id=collection_result_id)
     if not collection_result:
         raise HTTPException(status_code=404, detail="CollectionResult not found")
+    # 여기서 collection.id를 collection.collection_id로 변경
     collection = crud.get_record(db=db, model=Collection, record_id=collection_result.collection_id)
     if not collection or collection.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this collection result")
