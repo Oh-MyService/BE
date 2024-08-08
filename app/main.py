@@ -61,8 +61,6 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60  # 나중에 수정 필요
-
-
 ### users ###
 def get_user_by_username(db: Session, username: str):
     return db.query(User).filter(User.username == username).first()
@@ -146,8 +144,6 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     
     logging.debug(f"Authenticated user: {user.username}, ID: {user.id}")
     return user
-
-
 ### prompts ###
 # prompt 입력하기
 @app.post("/api/prompts")
@@ -161,7 +157,6 @@ def create_prompt(content: str = Form(...), db: Session = Depends(get_db), curre
     except Exception as e:
         logging.error(f"Error creating prompt: {e}")
         raise HTTPException(status_code=500, detail=f"Error creating prompt: {e}")
-    
 # 특정 user id에 대한 프롬프트 모두 보기
 @app.get("/api/prompts/user/{user_id}")
 def get_user_prompts(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -173,7 +168,6 @@ def get_user_prompts(user_id: int, db: Session = Depends(get_db), current_user: 
     except Exception as e:
         logging.error(f"Error fetching user prompts: {e}")
         raise HTTPException.status_code(500, detail=f"Error fetching user prompts: {e}")
-    
 # 특정 prompt id에 대한 프롬프트 보기
 @app.get("/api/prompts/{prompt_id}")
 def get_prompt(prompt_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -184,7 +178,6 @@ def get_prompt(prompt_id: int, db: Session = Depends(get_db), current_user: User
         return prompt
     except Exception as e:
         raise HTTPException.status_code(500, detail=f"Error fetching prompt: {e}")
-    
 ### results ###
 # result 올리기 -> 테스트용 
 @app.post("/api/results")
@@ -198,7 +191,6 @@ async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...
         return ResultResponse.from_orm(db_result)
     except Exception as e:
         raise HTTPException.status_code(500, detail=f"Error creating result: {e}")
-    
 # 특정 prompt id에 대한 이미지 결과 모두 보기
 @app.get("/api/results/{prompt_id}")
 def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -212,7 +204,6 @@ def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_us
         return results
     except Exception as e:
         raise HTTPException.status_code(500, detail=f"Error fetching prompt results: {e}")
-    
 # 특정 user id에 대한 이미지 결과 모두 보기
 @app.get("/api/results/user/{user_id}")
 def get_user_results(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -225,16 +216,13 @@ def get_user_results(user_id: int, db: Session = Depends(get_db), current_user: 
         return results
     except Exception as e:
         raise HTTPException.status_code(500, detail=f"Error fetching user results: {e}")
-    
 # 최근 생성 삭제
 @app.delete("/api/results/{result_id}", status_code=status.HTTP_200_OK)
 def delete_result(result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = crud.get_record(db=db, model=Result, record_id=result_id)
-    if not result or result.user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Result not found or not authorized")
+    if not result or result.user_id != current_user.id:raise HTTPException(status_code=404, detail="Result not found or not authorized")
     crud.delete_record(db=db, model=Result, record_id=result_id)
     return {"message": "Result deleted successfully"}
-
 
 # 소연언니 코드 ??
 @app.get("/api/user_results")
@@ -260,7 +248,6 @@ def get_user_results(request: Request, db: Session = Depends(get_db), current_us
         }
     except Exception as e:
         raise HTTPException.status_code(500, detail=f"Error fetching user results and collections: {e}")
-
 ### collections ###
 # 컬랙션 만들기
 @app.post("/api/collections")
@@ -289,7 +276,6 @@ def create_collection_endpoint(collection_name: str = Form(...), db: Session = D
     except Exception as e:
         logging.error(f"Error creating collection: {e}")
         raise HTTPException(status_code=500, detail=f"Error creating collection: {e}")
-
 # 특정 user id에 대한 컬랙션 모두 보기
 @app.get("/api/collections/user/{user_id}")
 def get_user_collections(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -317,7 +303,6 @@ def get_user_collections(user_id: int, db: Session = Depends(get_db), current_us
     except Exception as e:
         logging.error(f"Error fetching collections: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching collections: {e}")
-
 # 특정 이미지 컬랙션에 추가
 @app.post("/api/collections/{collection_id}/add_result")
 def add_result_to_collection(collection_id: int, result_id: int = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -336,7 +321,6 @@ def add_result_to_collection(collection_id: int, result_id: int = Form(...), db:
     except Exception as e:
         logging.error(f"Error adding result to collection: {e}")
         raise HTTPException(status_code=500, detail=f"Error adding result to collection: {e}")
-
 # 컬랙션 목록 불러오기 -> 아카이브    
 @app.get("/api/collections/user/{user_id}")
 def get_user_collections(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -390,7 +374,6 @@ def get_collection_images(collection_id: int, db: Session = Depends(get_db), cur
     except Exception as e:
         logging.error(f"Error fetching collection images: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching collection images: {e}")
-
 # 컬랙션 삭제
 @app.delete("/api/collections/{collection_id}", status_code=status.HTTP_200_OK)
 def delete_collection(collection_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -405,7 +388,6 @@ def delete_collection(collection_id: int, db: Session = Depends(get_db), current
     except Exception as e:
         logging.error(f"Error deleting collection: {e}")
         raise HTTPException(status_code=500, detail=f"Error deleting collection: {e}")
-
 # 컬랙션 이름 변경
 @app.put("/api/collections/{collection_id}", status_code=status.HTTP_200_OK)
 def update_collection_name(collection_id: int, new_name: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
