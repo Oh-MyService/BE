@@ -15,24 +15,17 @@ from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 import redis
-
 from . import crud
 from .database import get_db, engine, SessionLocal
 from .models import User, Prompt, Result, Collection, CollectionResult
 from .utils import sqlalchemy_to_pydantic, create_access_token, decode_access_token, is_token_expired
-
 # Load environment variables
 load_dotenv()
-
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
-
 app = FastAPI()
-
 redis_client = redis.Redis(host='43.202.57.225', port=26262, db=0)
-
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
 # Define origins
 origins = [
     "http://43.202.57.225:29292",
@@ -43,7 +36,6 @@ origins = [
     "http://inkyong.com",
     "https://inkyong.com",
 ]
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -51,7 +43,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 @app.middleware("http")
 async def add_cors_headers(request, call_next):
     logging.debug(f"Request origin: {request.headers.get('origin')}")
@@ -64,21 +55,18 @@ async def add_cors_headers(request, call_next):
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     logging.debug(f"Response headers: {response.headers}")
     return response
-
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 # JWT secret and algorithm
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60  # 나중에 수정 필요
 
+
 ### users ###
 def get_user_by_username(db: Session, username: str):
     return db.query(User).filter(User.username == username).first()
-
 UserCreate = create_model('UserCreate', username=(str, ...), password=(str, ...))
-
 @app.post("/register")
 def register_user(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
     db_user = get_user_by_username(db, username=username)
@@ -91,13 +79,11 @@ def register_user(username: str = Form(...), password: str = Form(...), db: Sess
         return {column.name: getattr(new_user, column.name) for column in new_user.__table__.columns}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating user: {e}")
-
 def authenticate_user(username: str, password: str, db: Session):
     user = get_user_by_username(db, username)
     if not user or not pwd_context.verify(password, user.hashed_password):
         return False
     return user
-
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     if expires_delta:
@@ -107,7 +93,6 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
-
 @app.post("/token")
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = authenticate_user(form_data.username, form_data.password, db)
@@ -122,7 +107,6 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
         data={"sub": user.username, "user_id": user.id}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer", "user_id": user.id}
-
 def verify_token(token: str = Depends(oauth2_scheme)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -132,14 +116,12 @@ def verify_token(token: str = Depends(oauth2_scheme)):
         return payload
     except JWTError:
         raise HTTPException(status_code=403, detail="Token is invalid or expired")
-
 @app.get("/verify-token/{token}")
 async def verify_user_token(token: str):
     if is_token_expired(token):
         raise HTTPException(status_code=403, detail="Token is expired")
     verify_token(token=token)
     return {"message": "Token is valid"}
-
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -165,6 +147,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     logging.debug(f"Authenticated user: {user.username}, ID: {user.id}")
     return user
 
+
 ### prompts ###
 # prompt 입력하기
 @app.post("/api/prompts")
@@ -178,7 +161,7 @@ def create_prompt(content: str = Form(...), db: Session = Depends(get_db), curre
     except Exception as e:
         logging.error(f"Error creating prompt: {e}")
         raise HTTPException(status_code=500, detail=f"Error creating prompt: {e}")
-
+    
 # 특정 user id에 대한 프롬프트 모두 보기
 @app.get("/api/prompts/user/{user_id}")
 def get_user_prompts(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -190,7 +173,7 @@ def get_user_prompts(user_id: int, db: Session = Depends(get_db), current_user: 
     except Exception as e:
         logging.error(f"Error fetching user prompts: {e}")
         raise HTTPException.status_code(500, detail=f"Error fetching user prompts: {e}")
-
+    
 # 특정 prompt id에 대한 프롬프트 보기
 @app.get("/api/prompts/{prompt_id}")
 def get_prompt(prompt_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -201,8 +184,7 @@ def get_prompt(prompt_id: int, db: Session = Depends(get_db), current_user: User
         return prompt
     except Exception as e:
         raise HTTPException.status_code(500, detail=f"Error fetching prompt: {e}")
-
-
+    
 ### results ###
 # result 올리기 -> 테스트용 
 @app.post("/api/results")
@@ -216,7 +198,7 @@ async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...
         return ResultResponse.from_orm(db_result)
     except Exception as e:
         raise HTTPException.status_code(500, detail=f"Error creating result: {e}")
-
+    
 # 특정 prompt id에 대한 이미지 결과 모두 보기
 @app.get("/api/results/{prompt_id}")
 def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -230,7 +212,7 @@ def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_us
         return results
     except Exception as e:
         raise HTTPException.status_code(500, detail=f"Error fetching prompt results: {e}")
-
+    
 # 특정 user id에 대한 이미지 결과 모두 보기
 @app.get("/api/results/user/{user_id}")
 def get_user_results(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -243,7 +225,7 @@ def get_user_results(user_id: int, db: Session = Depends(get_db), current_user: 
         return results
     except Exception as e:
         raise HTTPException.status_code(500, detail=f"Error fetching user results: {e}")
-
+    
 # 최근 생성 삭제
 @app.delete("/api/results/{result_id}", status_code=status.HTTP_200_OK)
 def delete_result(result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -253,6 +235,7 @@ def delete_result(result_id: int, db: Session = Depends(get_db), current_user: U
     crud.delete_record(db=db, model=Result, record_id=result_id)
     return {"message": "Result deleted successfully"}
 
+
 # 소연언니 코드 ??
 @app.get("/api/user_results")
 def get_user_results(request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -260,28 +243,23 @@ def get_user_results(request: Request, db: Session = Depends(get_db), current_us
         user_id = current_user.id
         results = db.query(Result).filter(Result.user_id == user_id).all()
         collections = db.query(Collection).filter(Collection.user_id == user_id).all()
-
         results_data = []
         for result in results:
             result_dict = {column.name: getattr(result, column.name) for column in result.__table__.columns}
             result_dict["image_data"] = base64.b64encode(result_dict["image_data"]).decode('utf-8')
             results_data.append(result_dict)
-
         collections_data = []
         for collection in collections:
             collection_dict = {column.name: getattr(collection, column.name) for column in collection.__table__.columns}
             collections_data.append(collection_dict)
-
         if not collections_data:
             collections_data = [{"message": "컬렉션이 비었습니다"}]
-
         return {
             "results": results_data,
             "collections": collections_data
         }
     except Exception as e:
         raise HTTPException.status_code(500, detail=f"Error fetching user results and collections: {e}")
-
 
 ### collections ###
 # 컬랙션 만들기
@@ -297,7 +275,6 @@ def create_collection_endpoint(collection_name: str = Form(...), db: Session = D
         db.add(new_collection)
         db.commit()
         db.refresh(new_collection)
-
         new_collection_result = CollectionResult(
             collection_id=new_collection.collection_id,
             result_id=None
@@ -305,7 +282,6 @@ def create_collection_endpoint(collection_name: str = Form(...), db: Session = D
         db.add(new_collection_result)
         db.commit()
         db.refresh(new_collection_result)
-
         return {
             "collection": {column.name: getattr(new_collection, column.name) for column in new_collection.__table__.columns},
             "collection_result": {column.name: getattr(new_collection_result, column.name) for column in new_collection_result.__table__.columns}
@@ -348,11 +324,9 @@ def add_result_to_collection(collection_id: int, result_id: int = Form(...), db:
     collection = db.query(Collection).filter(Collection.collection_id == collection_id).first()
     if not collection or collection.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Collection not found or not authorized")
-
     result = db.query(Result).filter(Result.id == result_id).first() 
     if not result or result.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Result not found or not authorized")
-
     try:
         new_collection_result = CollectionResult(collection_id=collection_id, result_id=result_id)
         db.add(new_collection_result)
@@ -362,7 +336,6 @@ def add_result_to_collection(collection_id: int, result_id: int = Form(...), db:
     except Exception as e:
         logging.error(f"Error adding result to collection: {e}")
         raise HTTPException(status_code=500, detail=f"Error adding result to collection: {e}")
-
 
 # 컬랙션 목록 불러오기 -> 아카이브    
 @app.get("/api/collections/user/{user_id}")
@@ -388,12 +361,10 @@ def get_user_collections(user_id: int, db: Session = Depends(get_db), current_us
     except Exception as e:
         raise HTTPException.status_code(500, detail=f"Error fetching collections: {e}")
     
-
  # 해당 컬렉션 눌렀을 때 이미지 불러오기
 @app.get("/api/collections/{collection_id}/images")
 def get_collection_images(collection_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     logging.debug(f"Fetching images for collection_id: {collection_id} by user_id: {current_user.id}")
-
     # Ensure the user owns the collection
     collection = db.query(Collection).filter(Collection.collection_id == collection_id, Collection.user_id == current_user.id).first()
     if not collection:
@@ -419,7 +390,6 @@ def get_collection_images(collection_id: int, db: Session = Depends(get_db), cur
     except Exception as e:
         logging.error(f"Error fetching collection images: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching collection images: {e}")
-
 
 # 컬랙션 삭제
 @app.delete("/api/collections/{collection_id}", status_code=status.HTTP_200_OK)
@@ -455,7 +425,6 @@ def delete_collection_result(collection_result_id: int, db: Session = Depends(ge
     collection = crud.get_record(db=db, model=Collection, record_id=collection_result.collection_id)
     if not collection or collection.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this collection result")
-
     crud.delete_record(db=db, model=CollectionResult, record_id=collection_result_id)
     return {"message": "Collection result deleted successfully"}
 
