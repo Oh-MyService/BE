@@ -426,10 +426,12 @@ def delete_collection_result(collection_result_id: int, db: Session = Depends(ge
     collection_result = crud.get_record(db=db, model=CollectionResult, record_id=collection_result_id)
     if not collection_result:
         raise HTTPException(status_code=404, detail="CollectionResult not found")
-    # 여기서 collection.id를 collection.collection_id로 변경
-    collection = crud.get_record(db=db, model=Collection, record_id=collection_result.collection_id)
+    
+    # collection_id를 검색합니다.
+    collection = db.query(Collection).filter(Collection.collection_id == collection_result.collection_id).first()
     if not collection or collection.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this collection result")
+    
     crud.delete_record(db=db, model=CollectionResult, record_id=collection_result_id)
     return {"message": "Collection result deleted successfully"}
 
