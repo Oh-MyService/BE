@@ -250,11 +250,8 @@ def delete_result(result_id: int, db: Session = Depends(get_db), current_user: U
     result = crud.get_record(db=db, model=Result, record_id=result_id)
     if not result or result.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Result not found or not authorized")
-
-    # 결과 삭제 (CollectionResult는 영향을 받지 않음)
     crud.delete_record(db=db, model=Result, record_id=result_id)
     return {"message": "Result deleted successfully"}
-
 
 # 소연언니 코드 ??
 @app.get("/api/user_results")
@@ -458,9 +455,9 @@ def delete_collection_result(collection_result_id: int, db: Session = Depends(ge
     collection = crud.get_record(db=db, model=Collection, record_id=collection_result.collection_id)
     if not collection or collection.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this collection result")
+
     crud.delete_record(db=db, model=CollectionResult, record_id=collection_result_id)
     return {"message": "Collection result deleted successfully"}
-
 
 if __name__ == "__main__":
     import uvicorn
