@@ -469,6 +469,32 @@ def get_collection_images_with_ids(collection_id: int, db: Session = Depends(get
         logging.error(f"Error fetching collection images with IDs: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching collection images with IDs: {e}")
 
+# 컬렉션 안에 있는 이미지 삭제
+@app.delete("/api/collections/{collection_id}/results/{result_id}", status_code=status.HTTP_200_OK)
+def delete_image_from_collection(collection_id: int, result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    logging.debug(f"Deleting result_id: {result_id} from collection_id: {collection_id} by user_id: {current_user.id}")
+    
+    # 컬렉션 존재 및 소유자 확인
+    collection = db.query(Collection).filter(Collection.collection_id == collection_id, Collection.user_id == current_user.id).first()
+    if not collection:
+        logging.error(f"Collection not found or not authorized for user_id: {current_user.id}")
+        raise HTTPException(status_code=404, detail="Collection not found or not authorized")
+    
+    # 해당 collection_id와 result_id에 해당하는 collection_result 찾기
+    collection_result = db.query(CollectionResult).filter(CollectionResult.collection_id == collection_id, CollectionResult.result_id == result_id).first()
+    if not collection_result:
+        logging.error(f"CollectionResult not found for collection_id: {collection_id} and result_id: {result_id}")
+        raise HTTPException(status_code=404, detail="CollectionResult not found")
+    
+    try:
+        # collection_result 삭제
+        crud.delete_record(db=db, model=CollectionResult, record_id=collection_result.id)
+        logging.debug(f"Deleted CollectionResult with ID: {collection_result.id}")
+        return {"message": "Image successfully removed from collection"}
+    except Exception as e:
+        logging.error(f"Error deleting image from collection: {e}")
+        raise HTTPException(status_code=500, detail=f"Error deleting image from collection: {e}")
+
 
 if __name__ == "__main__":
     import uvicorn
