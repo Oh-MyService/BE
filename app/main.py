@@ -330,9 +330,20 @@ def add_result_to_collection(collection_id: int, result_id: int = Form(...), db:
     collection = db.query(Collection).filter(Collection.collection_id == collection_id).first()
     if not collection or collection.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Collection not found or not authorized")
-    result = db.query(Result).filter(Result.id == result_id).first() 
+    
+    result = db.query(Result).filter(Result.id == result_id).first()
     if not result or result.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Result not found or not authorized")
+    
+    # 중복된 이미지인지 확인
+    duplicate_result = db.query(CollectionResult).filter(
+        CollectionResult.collection_id == collection_id,
+        CollectionResult.result_id == result_id
+    ).first()
+    
+    if duplicate_result:
+        raise HTTPException(status_code=400, detail="Image is already in the collection")
+    
     try:
         new_collection_result = CollectionResult(collection_id=collection_id, result_id=result_id)
         db.add(new_collection_result)
@@ -346,6 +357,7 @@ def add_result_to_collection(collection_id: int, result_id: int = Form(...), db:
     except Exception as e:
         logging.error(f"Error adding result to collection: {e}")
         raise HTTPException(status_code=500, detail=f"Error adding result to collection: {e}")
+
 
     
 # 컬랙션 목록 불러오기 -> 아카이브    
@@ -426,61 +438,13 @@ def update_collection_name(collection_id: int, new_name: str = Form(...), db: Se
     return {"message": "Collection name updated successfully"}
 
 # 컬렉션 안에 있는 이미지 삭제
-@app.delete("/api/collection_results/{collection_result_id}", status_code=status.HTTP_200_OK)
-def delete_collection_result(collection_result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    collection_result = crud.get_record(db=db, model=CollectionResult, record_id=collection_result_id)
-    if not collection_result:
-        raise HTTPException(status_code=404, detail="CollectionResult not found")
-    collection = db.query(Collection).filter(Collection.collection_id == collection_result.collection_id).first()
-    if not collection or collection.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to delete this collection result")
-
-    crud.delete_record(db=db, model=CollectionResult, record_id=collection_result_id)
-    return {"message": "Collection result deleted successfully"}
-
-# 해당 컬렉션에 있는 이미지 정보 가져오기 
-@app.get("/api/collections/{collection_id}/images_with_ids")
-def get_collection_images_with_ids(collection_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    logging.debug(f"Fetching images with IDs for collection_id: {collection_id} by user_id: {current_user.id}")
-    # Ensure the user owns the collection
-    collection = db.query(Collection).filter(Collection.collection_id == collection_id, Collection.user_id == current_user.id).first()
-    if not collection:
-        logging.error(f"Collection not found or not authorized for user_id: {current_user.id}")
-        raise HTTPException(status_code=404, detail="Collection not found or not authorized")
-    
-    try:
-        collection_results = db.query(CollectionResult).filter(CollectionResult.collection_id == collection_id).all()
-        logging.debug(f"Collection results: {collection_results}")
-        images = []
-
-        for collection_result in collection_results:
-            result = db.query(Result).filter(Result.id == collection_result.result_id).first()
-            logging.debug(f"Fetched result: {result}")
-            if result:
-                result_data = {
-                    "collection_result_id": collection_result.id,
-                    "result_id": result.id,
-                    "image_data": base64.b64encode(result.image_data).decode('utf-8')
-                }
-                images.append(result_data)
-                
-        return {"images": images}
-    except Exception as e:
-        logging.error(f"Error fetching collection images with IDs: {e}")
-        raise HTTPException(status_code=500, detail=f"Error fetching collection images with IDs: {e}")
-
-# 컬렉션 안에 있는 이미지 삭제
 @app.delete("/api/collections/{collection_id}/results/{result_id}", status_code=status.HTTP_200_OK)
 def delete_image_from_collection(collection_id: int, result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     logging.debug(f"Deleting result_id: {result_id} from collection_id: {collection_id} by user_id: {current_user.id}")
-    
-    # 컬렉션 존재 및 소유자 확인
     collection = db.query(Collection).filter(Collection.collection_id == collection_id, Collection.user_id == current_user.id).first()
     if not collection:
         logging.error(f"Collection not found or not authorized for user_id: {current_user.id}")
         raise HTTPException(status_code=404, detail="Collection not found or not authorized")
-    
-    # 해당 collection_id와 result_id에 해당하는 collection_result 찾기
     collection_result = db.query(CollectionResult).filter(CollectionResult.collection_id == collection_id, CollectionResult.result_id == result_id).first()
     if not collection_result:
         logging.error(f"CollectionResult not found for collection_id: {collection_id} and result_id: {result_id}")
