@@ -23,6 +23,16 @@ from .database import get_db, engine, SessionLocal
 from .models import User, Prompt, Result, Collection, CollectionResult
 from .utils import sqlalchemy_to_pydantic, create_access_token, decode_access_token, is_token_expired
 
+## 래빛엠큐
+import pika
+
+# RabbitMQ 연결 설정
+rabbitmq_connection = pika.BlockingConnection(pika.ConnectionParameters(host='your_rabbitmq_host'))
+rabbitmq_channel = rabbitmq_connection.channel()
+# 큐 선언
+rabbitmq_channel.queue_declare(queue='image_queue')
+
+
 # Load environment variables
 load_dotenv()
 
@@ -162,8 +172,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 
 ### prompts ###
-# prompt 입력하기
-# 프롬프트 생성 및 이미지 생성 요청 >> redis 연결
+# 프롬프트 생성 및 이미지 생성 요청 >> RabbitMQ 연결
 @app.post("/api/prompts/")
 def create_prompt(content: str = Form(...), db: Session = Depends(get_db), background_tasks: BackgroundTasks = None, current_user: User = Depends(get_current_user)):
     # Prompt 테이블에 새로운 프롬프트 저장
@@ -176,8 +185,21 @@ def create_prompt(content: str = Form(...), db: Session = Depends(get_db), backg
 
 def start_image_generation(content: str, prompt_id: int):
     task_data = {"content": content, "prompt_id": prompt_id}
-    redis_client.lpush("image_queue", json.dumps(task_data))
-    redis_client.set(f"prompt_{prompt_id}", json.dumps(task_data))
+    try:
+        rabbitmq_channel.basic_publish(
+            exchange='',
+            routing_key='image_queue',
+            body=json.dumps(task_data)
+        )
+    except Exception as e:
+        # 에러가 발생하면 로그를 남기거나 에러를 처리할 수 있습니다.
+        raise HTTPException(status_code=500, detail=f"Failed to enqueue task: {str(e)}")
+
+# 앱 종료 시 RabbitMQ 연결을 닫습니다.
+@app.on_event("shutdown")
+def shutdown_event():
+    rabbitmq_connection.close()
+
 
 # 특정 user id에 대한 프롬프트 모두 보기
 @app.get("/api/prompts/user/{user_id}")
@@ -231,7 +253,7 @@ def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_us
     except Exception as e:
         raise HTTPException.status_code(500, detail=f"Error fetching prompt results: {e}")
 
-# 생성된 이미지 반환 특정 프롬프트의 첫 번째 이미지 반환 >> redis
+# 생성된 이미지 반환 특정 프롬프트의 첫 번째 이미지 반환 >> RabbitMQ
 @app.get("/api/images/{prompt_id}")
 def get_image(prompt_id: int, db: Session = Depends(get_db)):
     result = db.query(Result).filter(Result.prompt_id == prompt_id).first()
@@ -476,30 +498,6 @@ def delete_image_from_collection(collection_id: int, result_id: int, db: Session
         logging.error(f"Error deleting image from collection: {e}")
         raise HTTPException(status_code=500, detail=f"Error deleting image from collection: {e}")
 
-### AI  ###
-redis_client = redis.Redis(host='43.202.57.225', port=26262, db=0)
-
-
-# 이미지 생성 상태 조회
-@app.get("/api/status/{task_id}")
-def get_status(task_id: str, db: Session = Depends(get_db)):
-    task_data = redis_client.get(task_id)
-    if task_data:
-        task_data = json.loads(task_data)
-        if task_data.get("status") == "completed":
-            result = db.query(Result).filter(Result.prompt_id == task_id).first()
-            if result:
-                return {"task_id": task_id, "status": "completed", "image_url": f"/api/images/{task_id}"}
-        return task_data
-    return JSONResponse({"status": "not found"}, status_code=404)
-
-# 생성된 이미지 반환
-@app.get("/api/images/{task_id}")
-def get_image(task_id: str, db: Session = Depends(get_db)):
-    result = db.query(Result).filter(Result.prompt_id == task_id).first()
-    if result:
-        return JSONResponse({"image_data": result.image_data})
-    return JSONResponse({"status": "not found"}, status_code=404)
 
 
 if __name__ == "__main__":

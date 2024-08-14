@@ -17,3 +17,5 @@ cryptography
 python-jose
 passlib
 redis
+
+pika
