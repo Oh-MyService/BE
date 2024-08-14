@@ -6,17 +6,13 @@ services:
     ports:
       - "28282:8000"
     depends_on:
-      - redis
+      - rabbitmq
     environment:
       - DATABASE_URL=mysql+pymysql://user:password@mysql_container:21212/mydatabase
-      - REDIS_URL=redis://redis:26262
+      - CELERY_BROKER_URL=pyamqp://guest@rabbitmq//  # Celery가 RabbitMQ의 새로운 포트를 사용하도록 설정
 
-  redis:
-    image: "redis:latest"
+  rabbitmq:
+    image: "rabbitmq:management"
     ports:
-      - "26262:6379"
-    volumes:
-      - redis_data:/data
-
-volumes:
-  redis_data:
+      - "26262:5672"  # AMQP 포트를 26262로 변경
+      - "15672:15672"  # 관리 콘솔 포트는 그대로 유지
