@@ -23,14 +23,21 @@ from .database import get_db, engine, SessionLocal
 from .models import User, Prompt, Result, Collection, CollectionResult
 from .utils import sqlalchemy_to_pydantic, create_access_token, decode_access_token, is_token_expired
 
-## 래빛엠큐
+## RabbitMQ
 import pika
+from celery import Celery
 
 # RabbitMQ 연결 설정
-rabbitmq_connection = pika.BlockingConnection(pika.ConnectionParameters(host='your_rabbitmq_host'))
-rabbitmq_channel = rabbitmq_connection.channel()
+#rabbitmq_connection = pika.BlockingConnection(pika.ConnectionParameters(host='your_rabbitmq_host'))
+#rabbitmq_channel = rabbitmq_connection.channel()
 # 큐 선언
-rabbitmq_channel.queue_declare(queue='image_queue')
+#rabbitmq_channel.queue_declare(queue='image_queue')
+
+# Celery 설정: AI 워커 서버와 연결
+celery_app = Celery('ai_worker',
+                    broker=os.getenv('CELERY_BROKER_URL', 'pyamqp://guest@rabbitmq//'),
+                    backend=None)  # 결과 백엔드를 사용하지 않음
+
 
 
 # Load environment variables
