@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Depends, HTTPException, Request, Form, UploadFile, File, Cookie, status
+from fastapi import FastAPI, Depends, HTTPException, Request, Form, UploadFile, File, Cookie, status, BackgroundTasks
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import RedirectResponse, JSONResponse
@@ -10,6 +11,8 @@ import base64
 import os
 from datetime import datetime, timedelta
 import json
+import uuid
+import redis
 import logging
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -72,7 +75,9 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60  # 나중에 수정 필요
 ### users ###
 def get_user_by_username(db: Session, username: str):
     return db.query(User).filter(User.username == username).first()
+
 UserCreate = create_model('UserCreate', username=(str, ...), password=(str, ...))
+
 @app.post("/register")
 def register_user(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
     db_user = get_user_by_username(db, username=username)
@@ -99,6 +104,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
 @app.post("/token")
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = authenticate_user(form_data.username, form_data.password, db)
@@ -122,6 +128,7 @@ def verify_token(token: str = Depends(oauth2_scheme)):
         return payload
     except JWTError:
         raise HTTPException(status_code=403, detail="Token is invalid or expired")
+
 @app.get("/verify-token/{token}")
 async def verify_user_token(token: str):
     if is_token_expired(token):
@@ -151,23 +158,27 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         raise credentials_exception
     
     logging.debug(f"Authenticated user: {user.username}, ID: {user.id}")
-
-
     return user
+
+
 ### prompts ###
 # prompt 입력하기
-@app.post("/api/prompts")
-def create_prompt(content: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    logging.debug(f"Received request to create prompt with content: {content} for user ID: {current_user.id}")
-    try:
-        prompt_data = {"content": content, "user_id": current_user.id, "created_at": datetime.now()}
-        new_prompt = crud.create_record(db=db, model=Prompt, **prompt_data)
-        logging.debug(f"Created new prompt: {new_prompt}")
-        return {column.name: getattr(new_prompt, column.name) for column in new_prompt.__table__.columns}
-    except Exception as e:
-        logging.error(f"Error creating prompt: {e}")
-        raise HTTPException(status_code=500, detail=f"Error creating prompt: {e}")
-    
+# 프롬프트 생성 및 이미지 생성 요청 >> redis 연결
+@app.post("/api/prompts/")
+def create_prompt(content: str = Form(...), db: Session = Depends(get_db), background_tasks: BackgroundTasks = None, current_user: User = Depends(get_current_user)):
+    # Prompt 테이블에 새로운 프롬프트 저장
+    prompt_data = {"content": content, "user_id": current_user.id, "created_at": datetime.now()}
+    new_prompt = crud.create_record(db=db, model=Prompt, **prompt_data)
+
+    # 이미지 생성 작업을 백그라운드에서 처리
+    background_tasks.add_task(start_image_generation, content, new_prompt.id)
+    return {"prompt_id": new_prompt.id}
+
+def start_image_generation(content: str, prompt_id: int):
+    task_data = {"content": content, "prompt_id": prompt_id}
+    redis_client.lpush("image_queue", json.dumps(task_data))
+    redis_client.set(f"prompt_{prompt_id}", json.dumps(task_data))
+
 # 특정 user id에 대한 프롬프트 모두 보기
 @app.get("/api/prompts/user/{user_id}")
 def get_user_prompts(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -219,7 +230,15 @@ def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_us
         return results
     except Exception as e:
         raise HTTPException.status_code(500, detail=f"Error fetching prompt results: {e}")
-    
+
+# 생성된 이미지 반환 특정 프롬프트의 첫 번째 이미지 반환 >> redis
+@app.get("/api/images/{prompt_id}")
+def get_image(prompt_id: int, db: Session = Depends(get_db)):
+    result = db.query(Result).filter(Result.prompt_id == prompt_id).first()
+    if result:
+        return JSONResponse({"image_data": result.image_data})
+    return JSONResponse({"status": "not found"}, status_code=404)
+
 # 특정 user id에 대한 이미지 결과 모두 보기
 @app.get("/api/results/user/{user_id}")
 def get_user_results(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -358,8 +377,6 @@ def add_result_to_collection(collection_id: int, result_id: int = Form(...), db:
         logging.error(f"Error adding result to collection: {e}")
         raise HTTPException(status_code=500, detail=f"Error adding result to collection: {e}")
 
-
-    
 # 컬랙션 목록 불러오기 -> 아카이브    
 @app.get("/api/collections/user/{user_id}")
 def get_user_collections(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -458,6 +475,31 @@ def delete_image_from_collection(collection_id: int, result_id: int, db: Session
     except Exception as e:
         logging.error(f"Error deleting image from collection: {e}")
         raise HTTPException(status_code=500, detail=f"Error deleting image from collection: {e}")
+
+### AI  ###
+redis_client = redis.Redis(host='43.202.57.225', port=26262, db=0)
+
+
+# 이미지 생성 상태 조회
+@app.get("/api/status/{task_id}")
+def get_status(task_id: str, db: Session = Depends(get_db)):
+    task_data = redis_client.get(task_id)
+    if task_data:
+        task_data = json.loads(task_data)
+        if task_data.get("status") == "completed":
+            result = db.query(Result).filter(Result.prompt_id == task_id).first()
+            if result:
+                return {"task_id": task_id, "status": "completed", "image_url": f"/api/images/{task_id}"}
+        return task_data
+    return JSONResponse({"status": "not found"}, status_code=404)
+
+# 생성된 이미지 반환
+@app.get("/api/images/{task_id}")
+def get_image(task_id: str, db: Session = Depends(get_db)):
+    result = db.query(Result).filter(Result.prompt_id == task_id).first()
+    if result:
+        return JSONResponse({"image_data": result.image_data})
+    return JSONResponse({"status": "not found"}, status_code=404)
 
 
 if __name__ == "__main__":
