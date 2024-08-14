@@ -35,10 +35,8 @@ from celery import Celery
 
 # Celery 설정: AI 워커 서버와 연결
 celery_app = Celery('ai_worker',
-                    broker=os.getenv('CELERY_BROKER_URL', 'pyamqp://guest@rabbitmq//'),
+                    broker=os.getenv('CELERY_BROKER_URL', 'pyamqp://guest@43.202.57.225:26262//'),
                     backend=None)  # 결과 백엔드를 사용하지 않음
-
-
 
 # Load environment variables
 load_dotenv()
@@ -179,33 +177,23 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 
 ### prompts ###
-# 프롬프트 생성 및 이미지 생성 요청 >> RabbitMQ 연결
+
+# 프롬프트 생성 및 이미지 생성 요청 -> 셀러리 작업으로 전달
 @app.post("/api/prompts/")
 def create_prompt(content: str = Form(...), db: Session = Depends(get_db), background_tasks: BackgroundTasks = None, current_user: User = Depends(get_current_user)):
     # Prompt 테이블에 새로운 프롬프트 저장
     prompt_data = {"content": content, "user_id": current_user.id, "created_at": datetime.now()}
     new_prompt = crud.create_record(db=db, model=Prompt, **prompt_data)
 
-    # 이미지 생성 작업을 백그라운드에서 처리
-    background_tasks.add_task(start_image_generation, content, new_prompt.id)
+    # 셀러리 작업에 이미지 생성 요청 전송
+    celery_app.send_task('tasks.generate_image', args=[content, str(new_prompt.id)])
+    
     return {"prompt_id": new_prompt.id}
-
-def start_image_generation(content: str, prompt_id: int):
-    task_data = {"content": content, "prompt_id": prompt_id}
-    try:
-        rabbitmq_channel.basic_publish(
-            exchange='',
-            routing_key='image_queue',
-            body=json.dumps(task_data)
-        )
-    except Exception as e:
-        # 에러가 발생하면 로그를 남기거나 에러를 처리할 수 있습니다.
-        raise HTTPException(status_code=500, detail=f"Failed to enqueue task: {str(e)}")
 
 # 앱 종료 시 RabbitMQ 연결을 닫습니다.
 @app.on_event("shutdown")
 def shutdown_event():
-    rabbitmq_connection.close()
+    celery_app.close()
 
 
 # 특정 user id에 대한 프롬프트 모두 보기
@@ -245,7 +233,40 @@ async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...
         return ResultResponse.from_orm(db_result)
     except Exception as e:
         raise HTTPException.status_code(500, detail=f"Error creating result: {e}")
+
+# 이미지 가져오기 프롬프트 아이디로
+@app.get("/api/images/{prompt_id}")
+def get_image(prompt_id: int, db: Session = Depends(get_db)):
+    # DB에서 결과 조회
+    result = db.query(Result).filter(Result.prompt_id == prompt_id).first()
     
+    if result:
+        # 이미지 데이터가 존재할 경우 반환
+        return JSONResponse({"image_data": result.image_data})
+    
+    # RabbitMQ 큐에서 작업 상태 확인 (예: 큐에 작업이 남아있는지 확인)
+    try:
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host='43.202.57.225'))
+        channel = connection.channel()
+        
+        method_frame, header_frame, body = channel.basic_get(queue='image_queue')
+        
+        if method_frame:
+            # 큐에 작업이 남아있으면 "처리 중" 상태를 반환
+            return JSONResponse({"status": "processing"}, status_code=202)
+        
+        # 큐에 작업이 없으면 처리 완료된 것으로 간주
+        return JSONResponse({"status": "not found"}, status_code=404)
+    
+    except Exception as e:
+        # 큐 확인 중 에러 발생 시 로그 기록 및 에러 반환
+        logging.error(f"Error checking RabbitMQ queue: {e}")
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+
+    finally:
+        connection.close()
+
+
 # 특정 prompt id에 대한 이미지 결과 모두 보기
 @app.get("/api/results/{prompt_id}")
 def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -259,14 +280,6 @@ def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_us
         return results
     except Exception as e:
         raise HTTPException.status_code(500, detail=f"Error fetching prompt results: {e}")
-
-# 생성된 이미지 반환 특정 프롬프트의 첫 번째 이미지 반환 >> RabbitMQ
-@app.get("/api/images/{prompt_id}")
-def get_image(prompt_id: int, db: Session = Depends(get_db)):
-    result = db.query(Result).filter(Result.prompt_id == prompt_id).first()
-    if result:
-        return JSONResponse({"image_data": result.image_data})
-    return JSONResponse({"status": "not found"}, status_code=404)
 
 # 특정 user id에 대한 이미지 결과 모두 보기
 @app.get("/api/results/user/{user_id}")
