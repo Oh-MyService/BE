@@ -19,3 +19,4 @@ passlib
 redis
 
 pika
+celery
