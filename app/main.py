@@ -234,6 +234,30 @@ async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...
     except Exception as e:
         raise HTTPException.status_code(500, detail=f"Error creating result: {e}")
 
+# Celery 작업 결과를 FastAPI 서버에 전달
+@app.post("/upload_image")
+async def upload_image(data: dict, db: Session = Depends(get_db)):
+    try:
+        prompt_id = data['prompt_id']
+        image_data = data['image']
+
+        # Base64 디코딩
+        image_binary = base64.b64decode(image_data)
+
+        # Result 테이블에 저장
+        result_data = {
+            "prompt_id": prompt_id,
+            "image_data": image_binary,
+            "created_at": datetime.now(),
+        }
+        new_result = crud.create_record(db=db, model=Result, **result_data)
+        
+        return {"status": "success", "result_id": new_result.id}
+    
+    except Exception as e:
+        logging.error(f"Error uploading image: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload image")
+
 # 이미지 가져오기 프롬프트 아이디로
 @app.get("/api/images/{prompt_id}")
 def get_image(prompt_id: int, db: Session = Depends(get_db)):
@@ -243,7 +267,7 @@ def get_image(prompt_id: int, db: Session = Depends(get_db)):
     if result:
         # 이미지 데이터가 존재할 경우 반환
         return JSONResponse({"image_data": result.image_data})
-    
+
     # RabbitMQ 큐에서 작업 상태 확인 (예: 큐에 작업이 남아있는지 확인)
     try:
         connection = pika.BlockingConnection(pika.ConnectionParameters(host='43.202.57.225'))
