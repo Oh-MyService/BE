@@ -9,7 +9,7 @@ services:
       - rabbitmq
     environment:
       - DATABASE_URL=mysql+pymysql://user:password@mysql_container:21212/mydatabase
-      - CELERY_BROKER_URL=pyamqp://guest@rabbitmq//  # Celery가 RabbitMQ의 새로운 포트를 사용하도록 설정
+      - CELERY_BROKER_URL=pyamqp://guest@rabbitmq:26262//  # Celery가 RabbitMQ의 새로운 포트를 사용하도록 설정
 
   rabbitmq:
     image: "rabbitmq:management"
