@@ -54,7 +54,8 @@ jobs:
       run: |
         echo "$SSH_PRIVATE_KEY" > private_key.pem
         chmod 600 private_key.pem
-        ssh -i private_key.pem $SSH_USERNAME@$LIGHTSAIL_INSTANCE_IP << 'EOF'
+        # SSH 옵션 추가하여 호스트 키 검증 비활성화
+        ssh -o StrictHostKeyChecking=no -i private_key.pem $SSH_USERNAME@$LIGHTSAIL_INSTANCE_IP << 'EOF'
           docker-compose -f /path/to/docker-compose.yml pull
           docker-compose -f /path/to/docker-compose.yml up -d --build
         EOF
