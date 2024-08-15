@@ -33,25 +33,18 @@ jobs:
       with:
         registry-type: public
 
-    - name: Build, tag, and push images to Amazon ECR Public
-      id: build-images
+    - name: Build, tag, and push FastAPI image to Amazon ECR Public
+      id: build-fastapi-image
       env:
         REGISTRY: ${{ steps.login-ecr-public.outputs.registry }}
-        REGISTRY_ALIAS: d0v2k3o3 # 본인의 alias 입력
-        BACKEND_REPOSITORY: ohmyservice_backend # FastAPI repository명
-        RABBITMQ_REPOSITORY: ohmyservice_rabbitmq # RabbitMQ repository명 (새로 추가)
+        REGISTRY_ALIAS: d0v2k3o3
+        REPOSITORY: ohmyservice_backend
         IMAGE_TAG: ${{ github.sha }}
       run: |
-        # Build and push FastAPI image
-        docker build --no-cache -t $REGISTRY/$REGISTRY_ALIAS/$BACKEND_REPOSITORY:$IMAGE_TAG .
-        docker push $REGISTRY/$REGISTRY_ALIAS/$BACKEND_REPOSITORY:$IMAGE_TAG
+        docker build --no-cache -t $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG .
+        docker push $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG
 
-        # Build and push RabbitMQ image (Assuming a Dockerfile exists for RabbitMQ)
-        docker build --no-cache -t $REGISTRY/$REGISTRY_ALIAS/$RABBITMQ_REPOSITORY:$IMAGE_TAG -f Dockerfile.rabbitmq .
-        docker push $REGISTRY/$REGISTRY_ALIAS/$RABBITMQ_REPOSITORY:$IMAGE_TAG
-
-        echo "backend_image=$REGISTRY/$REGISTRY_ALIAS/$BACKEND_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-        echo "rabbitmq_image=$REGISTRY/$REGISTRY_ALIAS/$RABBITMQ_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+        echo "backend_image=$REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
     - name: Install SSH client
       run: sudo apt-get install -y openssh-client
@@ -68,8 +61,8 @@ jobs:
 
     - name: Deploy to Amazon Lightsail
       env:
-        BACKEND_IMAGE: ${{ steps.build-images.outputs.backend_image }}
-        RABBITMQ_IMAGE: ${{ steps.build-images.outputs.rabbitmq_image }}
+        BACKEND_IMAGE: ${{ steps.build-fastapi-image.outputs.backend_image }}
+        RABBITMQ_IMAGE: rabbitmq:management # 기본 RabbitMQ 이미지를 사용
       run: |
         ssh -o StrictHostKeyChecking=no $SSH_USERNAME@$LIGHTSAIL_INSTANCE_IP << EOF
           BACKEND_IMAGE=${BACKEND_IMAGE}
