@@ -80,5 +80,5 @@ jobs:
 
           # Run new containers
           sudo docker run -d --name fastapi_app --env-file /home/$SSH_USERNAME/.env -p 28282:8000 \\$BACKEND_IMAGE
-          sudo docker run -d --name rabbitmq -p 15672:15672 -p 5672:5672 \\$RABBITMQ_IMAGE
+          sudo docker run -d --name rabbitmq -p 25672:15672 -p 26262:5672 \\$RABBITMQ_IMAGE
         EOF
