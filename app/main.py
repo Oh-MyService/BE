@@ -34,7 +34,7 @@ from celery import Celery
 #rabbitmq_channel.queue_declare(queue='image_queue')
 
 # Celery 설정: AI 워커 서버와 연결
-celery_app = Celery('ai_worker',
+celery_app = Celery('worker',
                     broker=os.getenv('CELERY_BROKER_URL', 'pyamqp://guest@43.202.57.225:26262//'),
                     backend=None)  # 결과 백엔드를 사용하지 않음
 
