@@ -186,7 +186,7 @@ def create_prompt(content: str = Form(...), db: Session = Depends(get_db), backg
     new_prompt = crud.create_record(db=db, model=Prompt, **prompt_data)
     
     logging.info(f"Sending task to Celery for prompt_id: {new_prompt.id}")
-    celery_app.send_task('tasks.generate_image', args=[content, str(new_prompt.id)])
+    celery_app.send_task('worker.generate_image', args=[content, str(new_prompt.id)])
 
     return {"prompt_id": new_prompt.id}
 
