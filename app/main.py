@@ -233,55 +233,41 @@ async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...
         raise HTTPException.status_code(500, detail=f"Error creating result: {e}")
 
 # Celery 작업 결과를 FastAPI 서버에 전달
-@celery.task(bind=True)
-def generate_image(self, prompt: str, prompt_id: str):
+@app.post("/upload_image")
+async def upload_image(data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
-        logging.info(f"Received task to generate image with prompt: {prompt}")
-        
-        # 이미지 생성
+        prompt_id = data['prompt_id']
+        image_data = data['image']
+
+        # Base64 디코딩
         try:
-            image = Image.new('RGB', (200, 100), color=(73, 109, 137))
-            d = ImageDraw.Draw(image)
-            d.text((10, 10), prompt, fill=(255, 255, 0))
-        except Exception as img_error:
-            logging.error(f"Error generating image: {img_error}")
-            raise self.retry(exc=img_error, countdown=10, max_retries=3)
-        
-        # 이미지 데이터를 base64로 인코딩
+            image_binary = base64.b64decode(image_data)
+            logging.debug(f"Decoded Image Size: {len(image_binary)} bytes")
+        except Exception as e:
+            logging.error(f"Base64 decoding failed: {e}")
+            raise HTTPException(status_code=400, detail="Invalid image data")
+
+        # Result 테이블에 저장
         try:
-            buffered = io.BytesIO()
-            image.save(buffered, format="JPEG")
-            img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
-            logging.debug(f"Base64 Encoded Image: {img_str[:100]}...")  # 이미지 문자열의 일부만 로그에 출력
-        except Exception as encode_error:
-            logging.error(f"Error encoding image to base64: {encode_error}")
-            raise self.retry(exc=encode_error, countdown=10, max_retries=3)
-        
-        # 서버로 결과 전송
-        try:
-            WEB_SERVER_URL = "http://43.202.57.225:28282/upload_image"
-            data = {'prompt_id': prompt_id, 'image': img_str}
-            
-            # 특정 포트에서 요청을 보내기 위한 설정
-            session = requests.Session()
-            adapter = SourcePortAdapter(source_port=27272)
-            session.mount('http://', adapter)
-            session.mount('https://', adapter)
-            
-            response = session.post(WEB_SERVER_URL, json=data)
-        
-            if response.status_code == 200:
-                logging.info(f"Image uploaded successfully for prompt_id: {prompt_id}")
-            else:
-                logging.error(f"Failed to upload image for prompt_id: {prompt_id}, Status code: {response.status_code}")
-        except Exception as post_error:
-            logging.error(f"Error uploading image to server: {post_error}")
-            raise self.retry(exc=post_error, countdown=10, max_retries=3)
-    
+            result_data = {
+                "prompt_id": prompt_id,
+                "image_data": image_binary,
+                "created_at": datetime.now(),
+                "user_id": current_user.id  # 인증된 사용자의 ID
+            }
+            new_result = crud.create_record(db=db, model=Result, **result_data)
+            db.commit()
+            logging.info(f"Image saved for prompt_id {prompt_id} with result_id {new_result.id}")
+            return {"status": "success", "result_id": new_result.id}
+        except Exception as db_error:
+            db.rollback()
+            logging.error(f"Error saving image to database: {db_error}")
+            raise HTTPException(status_code=500, detail="Failed to save image to database")
+
     except Exception as e:
-        logging.error(f"Unhandled error in generating image: {e}")
-        self.update_state(state='FAILURE', meta={'exc_message': str(e)})
-        raise e
+        logging.error(f"Unhandled error in upload_image: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload image")
+
 
 
 # 이미지 가져오기 프롬프트 아이디로
