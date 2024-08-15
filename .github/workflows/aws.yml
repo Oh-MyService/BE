@@ -59,8 +59,8 @@ jobs:
           # docker-compose 설치
           sudo apt-get update
           sudo apt-get install -y docker-compose
-          docker-compose -f /home/ubuntu/app/docker-compose.yml pull
-          docker-compose -f /home/ubuntu/app/docker-compose.yml up -d --build
+          docker-compose -f /home/ubuntu/myproject/docker-compose.yml pull
+          docker-compose -f /home/ubuntu/myproject/docker-compose.yml up -d --build
         EOF
       env:
         AWS_REGION: us-east-1
