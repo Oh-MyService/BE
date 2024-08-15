@@ -244,7 +244,7 @@ async def upload_image(data: dict, db: Session = Depends(get_db)):
         try:
             image_binary = base64.b64decode(image_data)
         except Exception as e:
-            logging.error(f"Error decoding image: {e}")
+            logging.error(f"Base64 decoding failed: {e}")
             raise HTTPException(status_code=400, detail="Invalid image data")
 
         # Result 테이블에 저장
@@ -255,15 +255,18 @@ async def upload_image(data: dict, db: Session = Depends(get_db)):
                 "created_at": datetime.now(),
             }
             new_result = crud.create_record(db=db, model=Result, **result_data)
+            db.commit()
             logging.info(f"Image saved for prompt_id {prompt_id} with result_id {new_result.id}")
             return {"status": "success", "result_id": new_result.id}
         except Exception as db_error:
+            db.rollback()
             logging.error(f"Error saving image to database: {db_error}")
             raise HTTPException(status_code=500, detail="Failed to save image to database")
 
     except Exception as e:
         logging.error(f"Unhandled error in upload_image: {e}")
         raise HTTPException(status_code=500, detail="Failed to upload image")
+
 
 # 이미지 가져오기 프롬프트 아이디로
 @app.get("/api/images/{prompt_id}")
