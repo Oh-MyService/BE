@@ -52,7 +52,15 @@ jobs:
 
     - name: Deploy to Lightsail
       run: |
-        ssh -i $SSH_PRIVATE_KEY $SSH_USERNAME@$LIGHTSAIL_INSTANCE_IP << 'EOF'
+        echo "$SSH_PRIVATE_KEY" > private_key.pem
+        chmod 600 private_key.pem
+        ssh -i private_key.pem $SSH_USERNAME@$LIGHTSAIL_INSTANCE_IP << 'EOF'
           docker-compose -f /path/to/docker-compose.yml pull
           docker-compose -f /path/to/docker-compose.yml up -d --build
         EOF
+      env:
+        AWS_REGION: us-east-1
+        LIGHTSAIL_INSTANCE_IP: ${{ secrets.LIGHTSAIL_INSTANCE_IP }}
+        SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
+        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      shell: /usr/bin/bash -e {0}
