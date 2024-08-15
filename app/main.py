@@ -19,7 +19,7 @@ from .database import get_db, engine, SessionLocal
 from .models import User, Prompt, Result, Collection, CollectionResult
 from .utils import sqlalchemy_to_pydantic, create_access_token, decode_access_token, is_token_expired
 from .crud import create_record  
-import requests
+
 
 ## RabbitMQ
 import pika
@@ -173,34 +173,42 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 
 ### prompts ###
-AI_SERVER_URL = "http://223.194.20.119:27272/generate_image"
 
 # 프롬프트 생성 및 이미지 생성 요청 -> 셀러리 작업으로 전달
-@app.post("/api/prompts/")
-def create_prompt(content: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    logging.info(f"Creating prompt with content: {content}")
-
-    # 프롬프트 데이터베이스에 저장
-    prompt_data = {
-        "content": content,
-        "user_id": current_user.id,
-        "created_at": datetime.now(),
-    }
-    new_prompt = create_record(db=db, model=Prompt, **prompt_data)
-
-    logging.info(f"Sending task to AI server for prompt_id: {new_prompt.id}")
-
-    # AI 서버에 작업 요청
+@app.post("/upload_image")
+async def upload_image(data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
-        response = requests.post(AI_SERVER_URL, json={"prompt": content, "prompt_id": str(new_prompt.id)})
-        if response.status_code != 200:
-            raise HTTPException(status_code=500, detail="Failed to send task to AI server")
-        logging.info(f"Task for prompt_id {new_prompt.id} successfully sent to AI server")
-    except requests.RequestException as e:
-        logging.error(f"Failed to send task to AI server: {e}")
-        raise HTTPException(status_code=500, detail="Failed to send task to AI server")
+        prompt_id = data['prompt_id']
+        image_data = data['image']
 
-    return {"prompt_id": new_prompt.id}
+        # Base64 디코딩
+        try:
+            image_binary = base64.b64decode(image_data)
+            logging.debug(f"Decoded Image Size: {len(image_binary)} bytes")
+        except Exception as e:
+            logging.error(f"Base64 decoding failed: {e}")
+            raise HTTPException(status_code=400, detail="Invalid image data")
+
+        # Result 테이블에 저장
+        try:
+            result_data = {
+                "prompt_id": prompt_id,
+                "image_data": image_binary,
+                "created_at": datetime.now(),
+                "user_id": current_user.id  # 인증된 사용자의 ID
+            }
+            new_result = crud.create_record(db=db, model=Result, **result_data)
+            db.commit()
+            logging.info(f"Image saved for prompt_id {prompt_id} with result_id {new_result.id}")
+            return {"status": "success", "result_id": new_result.id}
+        except Exception as db_error:
+            db.rollback()
+            logging.error(f"Error saving image to database: {db_error}")
+            raise HTTPException(status_code=500, detail="Failed to save image to database")
+
+    except Exception as e:
+        logging.error(f"Unhandled error in upload_image: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload image")
 
 # 앱 종료 시 RabbitMQ 연결을 닫습니다.
 @app.on_event("shutdown")
