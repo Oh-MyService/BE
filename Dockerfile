@@ -10,6 +10,9 @@ COPY requirements.txt .
 # Install the dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Set environment variables (replace with actual values)
+ENV DATABASE_URL=mysql+pymysql://user:password@mysql_container:21212/mydatabase
+
 # Copy the FastAPI app code into the container
 COPY . .
 
