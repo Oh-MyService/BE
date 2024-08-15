@@ -1,4 +1,4 @@
-name: Deploy FastAPI and RabbitMQ to Amazon Lightsail
+name: Deploy FastAPI to Amazon Lightsail
 
 on:
   push:
@@ -62,23 +62,17 @@ jobs:
     - name: Deploy to Amazon Lightsail
       env:
         BACKEND_IMAGE: ${{ steps.build-fastapi-image.outputs.backend_image }}
-        RABBITMQ_IMAGE: rabbitmq:management # 기본 RabbitMQ 이미지를 사용
       run: |
         ssh -o StrictHostKeyChecking=no $SSH_USERNAME@$LIGHTSAIL_INSTANCE_IP << EOF
           BACKEND_IMAGE=${BACKEND_IMAGE}
-          RABBITMQ_IMAGE=${RABBITMQ_IMAGE}
           
           # Pull the images
-          sudo docker pull \\$BACKEND_IMAGE
-          sudo docker pull \\$RABBITMQ_IMAGE
+          sudo docker pull \\\\$BACKEND_IMAGE
 
           # Stop and remove existing containers
-          sudo docker stop fastapi_app || true
-          sudo docker rm fastapi_app || true
-          sudo docker stop rabbitmq || true
-          sudo docker rm rabbitmq || true
+          sudo docker stop ohmyservice_backend || true
+          sudo docker rm ohmyservice_backend || true
 
           # Run new containers
-          sudo docker run -d --name fastapi_app --env-file /home/$SSH_USERNAME/.env -p 28282:8000 \\$BACKEND_IMAGE
-          sudo docker run -d --name rabbitmq -p 25672:15672 -p 26262:5672 \\$RABBITMQ_IMAGE
+          sudo docker run -d --name ohmyservice_backend --env-file /home/$SSH_USERNAME/.env -p 28282:8000 \\\\$BACKEND_IMAGE
         EOF
