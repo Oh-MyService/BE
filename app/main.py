@@ -233,20 +233,37 @@ async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...
     except Exception as e:
         raise HTTPException.status_code(500, detail=f"Error creating result: {e}")
 
-        # 서버로 결과 전송
+# Celery 작업 결과를 FastAPI 서버에 전달
+@app.post("/upload_image")
+async def upload_image(data: dict, db: Session = Depends(get_db)):
+    try:
+        prompt_id = data['prompt_id']
+        image_data = data['image']
+
+        # Base64 디코딩
         try:
-            WEB_SERVER_URL = "http://43.202.57.225:28282/upload_image"
-            data = {'prompt_id': prompt_id, 'image': img_str}
-            response = requests.post(WEB_SERVER_URL, json=data)
-        
-            if response.status_code == 200:
-                logging.info(f"Image uploaded successfully for prompt_id: {prompt_id}")
-            else:
-                logging.error(f"Failed to upload image for prompt_id: {prompt_id}, Status code: {response.status_code}")
-        except Exception as post_error:
-            logging.error(f"Error uploading image to server: {post_error}")
-            raise self.retry(exc=post_error, countdown=10, max_retries=3)
-    
+            image_binary = base64.b64decode(image_data)
+        except Exception as e:
+            logging.error(f"Error decoding image: {e}")
+            raise HTTPException(status_code=400, detail="Invalid image data")
+
+        # Result 테이블에 저장
+        try:
+            result_data = {
+                "prompt_id": prompt_id,
+                "image_data": image_binary,
+                "created_at": datetime.now(),
+            }
+            new_result = crud.create_record(db=db, model=Result, **result_data)
+            logging.info(f"Image saved for prompt_id {prompt_id} with result_id {new_result.id}")
+            return {"status": "success", "result_id": new_result.id}
+        except Exception as db_error:
+            logging.error(f"Error saving image to database: {db_error}")
+            raise HTTPException(status_code=500, detail="Failed to save image to database")
+
+    except Exception as e:
+        logging.error(f"Unhandled error in upload_image: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload image")
 
 # 이미지 가져오기 프롬프트 아이디로
 @app.get("/api/images/{prompt_id}")
