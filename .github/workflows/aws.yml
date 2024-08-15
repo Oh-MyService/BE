@@ -17,16 +17,22 @@ jobs:
     environment: production
 
     steps:
-    - name: Checkout
+    - name: Checkout source code
       uses: actions/checkout@v4
 
     - name: Set up Docker
       uses: docker/setup-buildx-action@v2
 
-    - name: Install Docker Compose on GitHub Action runner
+    - name: Install or Update Docker Compose on GitHub Action runner
       run: |
         sudo apt-get update
-        sudo apt-get install -y docker-compose
+        # 필요시 기존 설치된 docker-compose를 삭제
+        if command -v docker-compose &> /dev/null; then
+            sudo apt-get remove -y docker-compose
+        fi
+        # docker-compose 설치 (특정 버전 설치 가능)
+        sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        sudo chmod +x /usr/local/bin/docker-compose
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v2
@@ -41,26 +47,29 @@ jobs:
       with:
         registry-type: public
 
-    - name: Build, tag, and push image to Amazon ECR Public
-      id: build-image
-      env:
-        REGISTRY: ${{ steps.login-ecr-public.outputs.registry }}
-        IMAGE_TAG: latest
+    - name: Build, tag, and push Docker images
       run: |
-        docker-compose -f docker-compose.yml build
-        docker-compose -f docker-compose.yml push
+        docker-compose build
+        docker-compose push
 
     - name: Deploy to Lightsail
       run: |
         echo "$SSH_PRIVATE_KEY" > private_key.pem
         chmod 600 private_key.pem
-        # SSH 옵션 추가하여 호스트 키 검증 비활성화
         ssh -o StrictHostKeyChecking=no -i private_key.pem $SSH_USERNAME@$LIGHTSAIL_INSTANCE_IP << 'EOF'
-          # docker-compose 설치
-          sudo apt-get update
-          sudo apt-get install -y docker-compose
-          docker-compose -f /home/ubuntu/myproject/docker-compose.yml pull
-          docker-compose -f /home/ubuntu/myproject/docker-compose.yml up -d --build
+          # Docker Compose 설치 확인
+          if ! command -v docker-compose &> /dev/null; then
+              sudo apt-get update
+              sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+          fi
+
+          # 기존 컨테이너 중지
+          docker-compose down
+
+          # 최신 이미지 가져오기 및 컨테이너 재시작
+          docker-compose pull
+          docker-compose up -d --build
         EOF
       env:
         AWS_REGION: us-east-1
