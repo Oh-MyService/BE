@@ -23,7 +23,7 @@ jobs:
     - name: Set up Docker
       uses: docker/setup-buildx-action@v2
 
-    - name: Install Docker Compose
+    - name: Install Docker Compose on GitHub Action runner
       run: |
         sudo apt-get update
         sudo apt-get install -y docker-compose
@@ -56,6 +56,9 @@ jobs:
         chmod 600 private_key.pem
         # SSH 옵션 추가하여 호스트 키 검증 비활성화
         ssh -o StrictHostKeyChecking=no -i private_key.pem $SSH_USERNAME@$LIGHTSAIL_INSTANCE_IP << 'EOF'
+          # docker-compose 설치
+          sudo apt-get update
+          sudo apt-get install -y docker-compose
           docker-compose -f /path/to/docker-compose.yml pull
           docker-compose -f /path/to/docker-compose.yml up -d --build
         EOF
