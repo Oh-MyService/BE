@@ -181,13 +181,13 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 # 프롬프트 생성 및 이미지 생성 요청 -> 셀러리 작업으로 전달
 @app.post("/api/prompts/")
 def create_prompt(content: str = Form(...), db: Session = Depends(get_db), background_tasks: BackgroundTasks = None, current_user: User = Depends(get_current_user)):
-    # Prompt 테이블에 새로운 프롬프트 저장
+    logging.info(f"Creating prompt with content: {content}")
     prompt_data = {"content": content, "user_id": current_user.id, "created_at": datetime.now()}
     new_prompt = crud.create_record(db=db, model=Prompt, **prompt_data)
-
-    # 셀러리 작업에 이미지 생성 요청 전송
-    celery_app.send_task('tasks.generate_image', args=[content, str(new_prompt.id)])
     
+    logging.info(f"Sending task to Celery for prompt_id: {new_prompt.id}")
+    celery_app.send_task('tasks.generate_image', args=[content, str(new_prompt.id)])
+
     return {"prompt_id": new_prompt.id}
 
 # 앱 종료 시 RabbitMQ 연결을 닫습니다.
