@@ -251,9 +251,9 @@ async def upload_image(data: dict, db: Session = Depends(get_db), current_user: 
         try:
             result_data = {
                 "prompt_id": prompt_id,
-                "image_data": image_binary,
+                "image_data": image_binary,  # BLOB 데이터로 저장
                 "created_at": datetime.now(),
-                "user_id": current_user.id  # 인증된 사용자의 ID
+                "user_id": current_user.id  # user_id 추가
             }
             new_result = crud.create_record(db=db, model=Result, **result_data)
             db.commit()
@@ -267,7 +267,6 @@ async def upload_image(data: dict, db: Session = Depends(get_db), current_user: 
     except Exception as e:
         logging.error(f"Unhandled error in upload_image: {e}")
         raise HTTPException(status_code=500, detail="Failed to upload image")
-
 
 
 # 이미지 가져오기 프롬프트 아이디로
