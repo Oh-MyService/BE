@@ -3,16 +3,13 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import RedirectResponse, JSONResponse
-import httpx
 from typing import List, Optional
 from pydantic import BaseModel, create_model
 from dotenv import load_dotenv
 import base64
 import os
+import requests
 from datetime import datetime, timedelta
-import json
-import uuid
-import redis
 import logging
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -22,6 +19,7 @@ from . import crud
 from .database import get_db, engine, SessionLocal
 from .models import User, Prompt, Result, Collection, CollectionResult
 from .utils import sqlalchemy_to_pydantic, create_access_token, decode_access_token, is_token_expired
+from .crud import create_record  
 
 ## RabbitMQ
 import pika
@@ -175,16 +173,32 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 
 ### prompts ###
+AI_SERVER_URL = "http://223.194.20.119:27272/generate_image"
 
 # 프롬프트 생성 및 이미지 생성 요청 -> 셀러리 작업으로 전달
 @app.post("/api/prompts/")
-def create_prompt(content: str = Form(...), db: Session = Depends(get_db), background_tasks: BackgroundTasks = None, current_user: User = Depends(get_current_user)):
+def create_prompt(content: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     logging.info(f"Creating prompt with content: {content}")
-    prompt_data = {"content": content, "user_id": current_user.id, "created_at": datetime.now()}
-    new_prompt = crud.create_record(db=db, model=Prompt, **prompt_data)
-    
-    logging.info(f"Sending task to Celery for prompt_id: {new_prompt.id}")
-    celery_app.send_task('worker.generate_image', args=[content, str(new_prompt.id)])
+
+    # 프롬프트 데이터베이스에 저장
+    prompt_data = {
+        "content": content,
+        "user_id": current_user.id,
+        "created_at": datetime.now(),
+    }
+    new_prompt = create_record(db=db, model=Prompt, **prompt_data)
+
+    logging.info(f"Sending task to AI server for prompt_id: {new_prompt.id}")
+
+    # AI 서버에 작업 요청
+    try:
+        response = requests.post(AI_SERVER_URL, json={"prompt": content, "prompt_id": str(new_prompt.id)})
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail="Failed to send task to AI server")
+        logging.info(f"Task for prompt_id {new_prompt.id} successfully sent to AI server")
+    except requests.RequestException as e:
+        logging.error(f"Failed to send task to AI server: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send task to AI server")
 
     return {"prompt_id": new_prompt.id}
 
