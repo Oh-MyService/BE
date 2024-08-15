@@ -6,7 +6,7 @@ services:
       image: "rabbitmq:management"
       ports:
         - "26262:5672"  # AMQP 포트를 26262로 변경
-        - "15672:15672"  # 관리 콘솔 포트는 그대로 유지
+        - "25672:15672"  # 관리 콘솔 포트는 그대로 유지
   web:
     build: .
     ports:
