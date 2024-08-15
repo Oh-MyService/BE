@@ -43,7 +43,6 @@ jobs:
       run: |
         docker build --no-cache -t $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG .
         docker push $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG
-
         echo "backend_image=$REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
     - name: Install SSH client
@@ -67,12 +66,12 @@ jobs:
           BACKEND_IMAGE=${BACKEND_IMAGE}
           
           # Pull the images
-          sudo docker pull \\\\$BACKEND_IMAGE
-
+          sudo docker pull \\$BACKEND_IMAGE
+          
           # Stop and remove existing containers
-          sudo docker stop ohmyservice_backend || true
-          sudo docker rm ohmyservice_backend || true
-
-          # Run new containers
-          sudo docker run -d --name ohmyservice_backend --env-file /home/$SSH_USERNAME/.env -p 28282:8000 \\\\$BACKEND_IMAGE
+          sudo docker stop fastapi_app || true
+          sudo docker rm fastapi_app || true
+          
+          # Run new container
+          sudo docker run -d --name fastapi_app --env-file /home/$SSH_USERNAME/.env -p 28282:8000 \\$BACKEND_IMAGE
         EOF
