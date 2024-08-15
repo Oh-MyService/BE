@@ -1,4 +1,4 @@
-name: Deploy FastAPI to Amazon Lightsail
+name: Deploy FastAPI and RabbitMQ to Amazon Lightsail
 
 on:
   push:
@@ -17,22 +17,8 @@ jobs:
     environment: production
 
     steps:
-    - name: Checkout source code
+    - name: Checkout
       uses: actions/checkout@v4
-
-    - name: Set up Docker
-      uses: docker/setup-buildx-action@v2
-
-    - name: Install or Update Docker Compose on GitHub Action runner
-      run: |
-        sudo apt-get update
-        # 필요시 기존 설치된 docker-compose를 삭제
-        if command -v docker-compose &> /dev/null; then
-            sudo apt-get remove -y docker-compose
-        fi
-        # docker-compose 설치 (특정 버전 설치 가능)
-        sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-        sudo chmod +x /usr/local/bin/docker-compose
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v2
@@ -47,33 +33,59 @@ jobs:
       with:
         registry-type: public
 
-    - name: Build, tag, and push Docker images
-      run: |
-        docker-compose build
-        docker-compose push
-
-    - name: Deploy to Lightsail
-      run: |
-        echo "$SSH_PRIVATE_KEY" > private_key.pem
-        chmod 600 private_key.pem
-        ssh -o StrictHostKeyChecking=no -i private_key.pem $SSH_USERNAME@$LIGHTSAIL_INSTANCE_IP << 'EOF'
-          # Docker Compose 설치 확인
-          if ! command -v docker-compose &> /dev/null; then
-              sudo apt-get update
-              sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-              sudo chmod +x /usr/local/bin/docker-compose
-          fi
-
-          # 기존 컨테이너 중지
-          docker-compose down
-
-          # 최신 이미지 가져오기 및 컨테이너 재시작
-          docker-compose pull
-          docker-compose up -d --build
-        EOF
+    - name: Build, tag, and push images to Amazon ECR Public
+      id: build-images
       env:
-        AWS_REGION: us-east-1
-        LIGHTSAIL_INSTANCE_IP: ${{ secrets.LIGHTSAIL_INSTANCE_IP }}
-        SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
-        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-      shell: /usr/bin/bash -e {0}
+        REGISTRY: ${{ steps.login-ecr-public.outputs.registry }}
+        REGISTRY_ALIAS: d0v2k3o3 # 본인의 alias 입력
+        BACKEND_REPOSITORY: ohmyservice_backend # FastAPI repository명
+        RABBITMQ_REPOSITORY: ohmyservice_rabbitmq # RabbitMQ repository명 (새로 추가)
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # Build and push FastAPI image
+        docker build --no-cache -t $REGISTRY/$REGISTRY_ALIAS/$BACKEND_REPOSITORY:$IMAGE_TAG .
+        docker push $REGISTRY/$REGISTRY_ALIAS/$BACKEND_REPOSITORY:$IMAGE_TAG
+
+        # Build and push RabbitMQ image (Assuming a Dockerfile exists for RabbitMQ)
+        docker build --no-cache -t $REGISTRY/$REGISTRY_ALIAS/$RABBITMQ_REPOSITORY:$IMAGE_TAG -f Dockerfile.rabbitmq .
+        docker push $REGISTRY/$REGISTRY_ALIAS/$RABBITMQ_REPOSITORY:$IMAGE_TAG
+
+        echo "backend_image=$REGISTRY/$REGISTRY_ALIAS/$BACKEND_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+        echo "rabbitmq_image=$REGISTRY/$REGISTRY_ALIAS/$RABBITMQ_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+    - name: Install SSH client
+      run: sudo apt-get install -y openssh-client
+
+    - name: Copy SSH key
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+
+    - name: Copy .env file to Lightsail instance
+      run: |
+        scp -o StrictHostKeyChecking=no .env $SSH_USERNAME@$LIGHTSAIL_INSTANCE_IP:/home/$SSH_USERNAME/.env
+
+    - name: Deploy to Amazon Lightsail
+      env:
+        BACKEND_IMAGE: ${{ steps.build-images.outputs.backend_image }}
+        RABBITMQ_IMAGE: ${{ steps.build-images.outputs.rabbitmq_image }}
+      run: |
+        ssh -o StrictHostKeyChecking=no $SSH_USERNAME@$LIGHTSAIL_INSTANCE_IP << EOF
+          BACKEND_IMAGE=${BACKEND_IMAGE}
+          RABBITMQ_IMAGE=${RABBITMQ_IMAGE}
+          
+          # Pull the images
+          sudo docker pull \\$BACKEND_IMAGE
+          sudo docker pull \\$RABBITMQ_IMAGE
+
+          # Stop and remove existing containers
+          sudo docker stop fastapi_app || true
+          sudo docker rm fastapi_app || true
+          sudo docker stop rabbitmq || true
+          sudo docker rm rabbitmq || true
+
+          # Run new containers
+          sudo docker run -d --name fastapi_app --env-file /home/$SSH_USERNAME/.env -p 28282:8000 \\$BACKEND_IMAGE
+          sudo docker run -d --name rabbitmq -p 15672:15672 -p 5672:5672 \\$RABBITMQ_IMAGE
+        EOF
