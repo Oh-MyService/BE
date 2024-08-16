@@ -1,40 +1,21 @@
-from fastapi import FastAPI, Depends, HTTPException, Request, Form, UploadFile, File, Cookie, status, BackgroundTasks
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Depends, HTTPException, Request, Form, UploadFile, File, status
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.responses import RedirectResponse, JSONResponse
-from typing import List, Optional
-from pydantic import BaseModel, create_model
+from typing import Optional
+from pydantic import create_model
 from dotenv import load_dotenv
 import base64
 import os
-import requests
 from datetime import datetime, timedelta
 import logging
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
+from app.database import get_db
 from . import crud
-from .database import get_db, engine, SessionLocal
 from .models import User, Prompt, Result, Collection, CollectionResult
 from .utils import sqlalchemy_to_pydantic, create_access_token, decode_access_token, is_token_expired
-from .crud import create_record  
-
-
-## RabbitMQ
-import pika
-from celery import Celery
-
-# RabbitMQ 연결 설정
-#rabbitmq_connection = pika.BlockingConnection(pika.ConnectionParameters(host='your_rabbitmq_host'))
-#rabbitmq_channel = rabbitmq_connection.channel()
-# 큐 선언
-#rabbitmq_channel.queue_declare(queue='image_queue')
-
-# Celery 설정: AI 워커 서버와 연결
-celery_app = Celery('worker',
-                    broker=os.getenv('CELERY_BROKER_URL', 'pyamqp://guest:guest@43.202.57.225:26262//'),
-                    backend=None)  # 결과 백엔드를 사용하지 않음
+import requests
 
 # Load environment variables
 load_dotenv()
@@ -174,47 +155,26 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 ### prompts ###
 
-# 프롬프트 생성 및 이미지 생성 요청 -> 셀러리 작업으로 전달
-@app.post("/upload_image")
-async def upload_image(data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+# 이미지 생성 요청을 보낼 다른 FastAPI의 URL
+SECOND_API_URL = "http://127.0.0.1:8001/generate_image"
+
+@app.post("/prompts/")
+async def create_prompt(prompt_text: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
-        prompt_id = data['prompt_id']
-        image_data = data['image']
+        # 1. 프롬프트를 데이터베이스에 저장
+        new_prompt = crud.create_record(db=db, model=Prompt, prompt_text=prompt_text, user_id=current_user.id, created_at=datetime.now())
+        db.commit()
 
-        # Base64 디코딩
-        try:
-            image_binary = base64.b64decode(image_data)
-            logging.debug(f"Decoded Image Size: {len(image_binary)} bytes")
-        except Exception as e:
-            logging.error(f"Base64 decoding failed: {e}")
-            raise HTTPException(status_code=400, detail="Invalid image data")
-
-        # Result 테이블에 저장
-        try:
-            result_data = {
-                "prompt_id": prompt_id,
-                "image_data": image_binary,
-                "created_at": datetime.now(),
-                "user_id": current_user.id  # 인증된 사용자의 ID
-            }
-            new_result = crud.create_record(db=db, model=Result, **result_data)
-            db.commit()
-            logging.info(f"Image saved for prompt_id {prompt_id} with result_id {new_result.id}")
-            return {"status": "success", "result_id": new_result.id}
-        except Exception as db_error:
-            db.rollback()
-            logging.error(f"Error saving image to database: {db_error}")
-            raise HTTPException(status_code=500, detail="Failed to save image to database")
-
+        # 2. 다른 FastAPI 애플리케이션에 프롬프트 전달
+        response = requests.post(SECOND_API_URL, json={"prompt_id": new_prompt.id, "prompt_text": prompt_text})
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail="Failed to generate image from external service")
+        
+        return {"message": "Prompt saved and image generation started", "prompt_id": new_prompt.id}
     except Exception as e:
-        logging.error(f"Unhandled error in upload_image: {e}")
-        raise HTTPException(status_code=500, detail="Failed to upload image")
-
-# 앱 종료 시 RabbitMQ 연결을 닫습니다.
-@app.on_event("shutdown")
-def shutdown_event():
-    celery_app.close()
-
+        logging.error(f"Error creating prompt: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to create prompt")
 
 # 특정 user id에 대한 프롬프트 모두 보기
 @app.get("/api/prompts/user/{user_id}")
@@ -254,75 +214,22 @@ async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...
     except Exception as e:
         raise HTTPException.status_code(500, detail=f"Error creating result: {e}")
 
-# Celery 작업 결과를 FastAPI 서버에 전달
-@app.post("/upload_image")
-async def upload_image(data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+# 이미지 생성 결과를 받아서 데이터베이스에 저장하는 엔드포인트
+@app.post("/save_image/")
+async def save_generated_image(prompt_id: int, image_data: str, db: Session = Depends(get_db)):
     try:
-        prompt_id = data['prompt_id']
-        image_data = data['image']
-
         # Base64 디코딩
-        try:
-            image_binary = base64.b64decode(image_data)
-            logging.debug(f"Decoded Image Size: {len(image_binary)} bytes")
-        except Exception as e:
-            logging.error(f"Base64 decoding failed: {e}")
-            raise HTTPException(status_code=400, detail="Invalid image data")
+        image_binary = base64.b64decode(image_data)
 
         # Result 테이블에 저장
-        try:
-            result_data = {
-                "prompt_id": prompt_id,
-                "image_data": image_binary,  # BLOB 데이터로 저장
-                "created_at": datetime.now(),
-                "user_id": current_user.id  # user_id 추가
-            }
-            new_result = crud.create_record(db=db, model=Result, **result_data)
-            db.commit()
-            logging.info(f"Image saved for prompt_id {prompt_id} with result_id {new_result.id}")
-            return {"status": "success", "result_id": new_result.id}
-        except Exception as db_error:
-            db.rollback()
-            logging.error(f"Error saving image to database: {db_error}")
-            raise HTTPException(status_code=500, detail="Failed to save image to database")
-
+        new_result = crud.create_record(db=db, model=Result, prompt_id=prompt_id, image_data=image_binary, created_at=datetime.now())
+        db.commit()
+        return {"message": "Image saved successfully", "result_id": new_result.id}
     except Exception as e:
-        logging.error(f"Unhandled error in upload_image: {e}")
-        raise HTTPException(status_code=500, detail="Failed to upload image")
-
-
-# 이미지 가져오기 프롬프트 아이디로
-@app.get("/api/images/{prompt_id}")
-def get_image(prompt_id: int, db: Session = Depends(get_db)):
-    # DB에서 결과 조회
-    result = db.query(Result).filter(Result.prompt_id == prompt_id).first()
+        logging.error(f"Error saving generated image: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to save image")
     
-    if result:
-        # 이미지 데이터가 존재할 경우 반환
-        return JSONResponse({"image_data": result.image_data})
-
-    # RabbitMQ 큐에서 작업 상태 확인 (예: 큐에 작업이 남아있는지 확인)
-    try:
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host='43.202.57.225'))
-        channel = connection.channel()
-        
-        method_frame, header_frame, body = channel.basic_get(queue='image_queue')
-        
-        if method_frame:
-            # 큐에 작업이 남아있으면 "처리 중" 상태를 반환
-            return JSONResponse({"status": "processing"}, status_code=202)
-        
-        # 큐에 작업이 없으면 처리 완료된 것으로 간주
-        return JSONResponse({"status": "not found"}, status_code=404)
-    
-    except Exception as e:
-        # 큐 확인 중 에러 발생 시 로그 기록 및 에러 반환
-        logging.error(f"Error checking RabbitMQ queue: {e}")
-        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
-
-    finally:
-        connection.close()
-
 
 # 특정 prompt id에 대한 이미지 결과 모두 보기
 @app.get("/api/results/{prompt_id}")
