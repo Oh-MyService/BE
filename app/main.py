@@ -159,14 +159,14 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 SECOND_API_URL = "http://127.0.0.1:8001/generate_image"
 
 @app.post("/prompts/")
-async def create_prompt(prompt_text: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def create_prompt(content: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         # 1. 프롬프트를 데이터베이스에 저장
-        new_prompt = crud.create_record(db=db, model=Prompt, prompt_text=prompt_text, user_id=current_user.id, created_at=datetime.now())
+        new_prompt = crud.create_record(db=db, model=Prompt, content=content, user_id=current_user.id, created_at=datetime.now())
         db.commit()
 
         # 2. 다른 FastAPI 애플리케이션에 프롬프트 전달
-        response = requests.post(SECOND_API_URL, json={"prompt_id": new_prompt.id, "prompt_text": prompt_text})
+        response = requests.post(SECOND_API_URL, json={"prompt_id": new_prompt.id, "content": content})
         if response.status_code != 200:
             raise HTTPException(status_code=500, detail="Failed to generate image from external service")
         
@@ -214,7 +214,7 @@ async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...
     except Exception as e:
         raise HTTPException.status_code(500, detail=f"Error creating result: {e}")
 
-# 이미지 생성 결과를 받아서 데이터베이스에 저장하는 엔드포인트
+# 이미지 생성 결과를 받아서 데이터베이스에 저장
 @app.post("/save_image/")
 async def save_generated_image(prompt_id: int, image_data: str, db: Session = Depends(get_db)):
     try:
