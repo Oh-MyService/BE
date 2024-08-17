@@ -156,7 +156,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 ### prompts ###
 
 # 이미지 생성 요청을 보낼 다른 FastAPI의 URL
-SECOND_API_URL = "http://223.194.20.119:27272/generate-image"
+SECOND_API_URL = "http://112.152.14.116:27272/generate-image"
 
 @app.post("/api/prompts/")
 async def create_prompt(content: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
