@@ -158,7 +158,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 # 이미지 생성 요청을 보낼 다른 FastAPI의 URL
 SECOND_API_URL = "http://223.194.20.119:27272/generate-image"
 
-@app.post("/prompts/")
+@app.post("/api/prompts/")
 async def create_prompt(content: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         # 1. 프롬프트를 데이터베이스에 저장
