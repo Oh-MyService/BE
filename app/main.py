@@ -216,21 +216,33 @@ async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...
         raise HTTPException.status_code(500, detail=f"Error creating result: {e}")
 
 # 이미지 생성 결과를 받아서 데이터베이스에 저장
-@app.post("/save_image")
+@app.post("/api/save-image")
 async def save_generated_image(prompt_id: int, image_data: str, db: Session = Depends(get_db)):
     try:
+        # Log incoming data
         logging.debug(f"Received prompt_id: {prompt_id}")
-        logging.debug(f"Received image_data (Base64): {image_data[:50]}...")  # Base64 데이터 일부만 로그에 기록
-        
-        # Base64 디코딩
-        image_binary = base64.b64decode(image_data)
+        logging.debug(f"Received image_data (length): {len(image_data)}")
 
-        # Result 테이블에 저장
+        # Base64 decode the image data
+        try:
+            image_binary = base64.b64decode(image_data)
+        except Exception as e:
+            logging.error(f"Base64 decoding failed: {e}")
+            raise HTTPException(status_code=422, detail="Invalid image data")
+
+        # Ensure prompt exists
+        prompt = db.query(Prompt).filter(Prompt.id == prompt_id).first()
+        if not prompt:
+            logging.error(f"Prompt with id {prompt_id} not found")
+            raise HTTPException(status_code=404, detail="Prompt not found")
+
+        # Save to database
         new_result = crud.create_record(db=db, model=Result, prompt_id=prompt_id, image_data=image_binary, created_at=datetime.now())
         db.commit()
         return {"message": "Image saved successfully", "result_id": new_result.id}
+
     except Exception as e:
-        logging.error(f"Error saving generated image: {e}")
+        logging.error(f"Error in save_generated_image: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to save image")
 
