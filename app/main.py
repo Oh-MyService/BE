@@ -225,7 +225,6 @@ async def save_image(prompt_id: int, image_data: str, db: Session = Depends(get_
         # 데이터베이스에 이미지 저장
         result_data = {
             "prompt_id": prompt_id,
-            "user_id": current_user.id, 
             "image_data": image_blob,
             "created_at": datetime.now()
         }
