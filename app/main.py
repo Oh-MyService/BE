@@ -214,31 +214,28 @@ async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...
         return ResultResponse.from_orm(db_result)
     except Exception as e:
         raise HTTPException.status_code(500, detail=f"Error creating result: {e}")
-
-# 이미지 생성 결과를 받아서 데이터베이스에 저장
-@app.post("/api/save-image")
-async def save_generated_image(prompt_id: int, db: Session = Depends(get_db)):
-    try:
-        # Log incoming data
-        logging.debug(f"Received prompt_id: {prompt_id}")
-        # 이미지 데이터를 수신하지 않음
-        logging.debug("Image data is not processed or saved in this version.")
-
-        # Ensure prompt exists
-        prompt = db.query(Prompt).filter(Prompt.id == prompt_id).first()
-        if not prompt:
-            logging.error(f"Prompt with id {prompt_id} not found")
-            raise HTTPException(status_code=404, detail="Prompt not found")
-
-        # 이미지 데이터를 저장하지 않고, 단순히 성공 응답 반환
-        return {"message": "Image processing skipped, but prompt ID is valid.", "prompt_id": prompt_id}
-
-    except Exception as e:
-        logging.error(f"Error in save_generated_image: {e}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Failed to process request")
-
     
+# 이미지 데이터베이스에 저장   
+@app.post("/api/save-image/")
+async def save_image(prompt_id: int, image_data: str, db: Session = Depends(get_db)):
+    try:
+        # base64로 인코딩된 이미지를 디코딩하여 BLOB 형태로 변환
+        image_blob = base64.b64decode(image_data)
+        
+        # 데이터베이스에 이미지 저장
+        result_data = {
+            "prompt_id": prompt_id,
+            "user_id": 1,  # 여기에 올바른 user_id를 설정해야 합니다.
+            "image_data": image_blob,
+            "created_at": datetime.now()
+        }
+        db_result = crud.create_record(db=db, model=Result, **result_data)
+        
+        return {"message": "Image saved successfully", "result_id": db_result.id}
+    
+    except Exception as e:
+        logging.error(f"Error saving image: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save image")    
 
 # 특정 prompt id에 대한 이미지 결과 모두 보기
 @app.get("/api/results/{prompt_id}")
