@@ -216,8 +216,8 @@ async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...
         raise HTTPException.status_code(500, detail=f"Error creating result: {e}")
     
 # 이미지 데이터베이스에 저장   
-@app.post("/api/save-image/")
-async def save_image(prompt_id: int, image_data: str, db: Session = Depends(get_db)):
+@app.post("/api/save-image")
+async def save_image(prompt_id: int, image_data: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         # base64로 인코딩된 이미지를 디코딩하여 BLOB 형태로 변환
         image_blob = base64.b64decode(image_data)
@@ -225,7 +225,7 @@ async def save_image(prompt_id: int, image_data: str, db: Session = Depends(get_
         # 데이터베이스에 이미지 저장
         result_data = {
             "prompt_id": prompt_id,
-            "user_id": 1,  # 여기에 올바른 user_id를 설정해야 합니다.
+            "user_id": current_user.id, 
             "image_data": image_blob,
             "created_at": datetime.now()
         }
@@ -235,7 +235,7 @@ async def save_image(prompt_id: int, image_data: str, db: Session = Depends(get_
     
     except Exception as e:
         logging.error(f"Error saving image: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save image")    
+        raise HTTPException(status_code=500, detail="Failed to save image")
 
 # 특정 prompt id에 대한 이미지 결과 모두 보기
 @app.get("/api/results/{prompt_id}")
