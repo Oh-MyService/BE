@@ -219,6 +219,9 @@ async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...
 @app.post("/save_image")
 async def save_generated_image(prompt_id: int, image_data: str, db: Session = Depends(get_db)):
     try:
+        logging.debug(f"Received prompt_id: {prompt_id}")
+        logging.debug(f"Received image_data (Base64): {image_data[:50]}...")  # Base64 데이터 일부만 로그에 기록
+        
         # Base64 디코딩
         image_binary = base64.b64decode(image_data)
 
@@ -230,6 +233,7 @@ async def save_generated_image(prompt_id: int, image_data: str, db: Session = De
         logging.error(f"Error saving generated image: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to save image")
+
     
 
 # 특정 prompt id에 대한 이미지 결과 모두 보기
