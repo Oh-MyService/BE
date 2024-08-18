@@ -216,7 +216,7 @@ async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...
         raise HTTPException.status_code(500, detail=f"Error creating result: {e}")
 
 # 이미지 생성 결과를 받아서 데이터베이스에 저장
-@app.post("/save_image/")
+@app.post("/save_image")
 async def save_generated_image(prompt_id: int, image_data: str, db: Session = Depends(get_db)):
     try:
         # Base64 디코딩
