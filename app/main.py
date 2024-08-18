@@ -225,6 +225,7 @@ async def save_image(prompt_id: int, image_data: str, db: Session = Depends(get_
         # 데이터베이스에 이미지 저장
         result_data = {
             "prompt_id": prompt_id,
+            "user_id": current_user.id,  # 현재 사용자 ID를 자동으로 설정
             "image_data": image_blob,
             "created_at": datetime.now()
         }
@@ -235,6 +236,7 @@ async def save_image(prompt_id: int, image_data: str, db: Session = Depends(get_
     except Exception as e:
         logging.error(f"Error saving image: {e}")
         raise HTTPException(status_code=500, detail="Failed to save image")
+
 
 # 특정 prompt id에 대한 이미지 결과 모두 보기
 @app.get("/api/results/{prompt_id}")
