@@ -159,14 +159,28 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 SECOND_API_URL = "http://112.152.14.116:27272/generate-image"
 
 # prompt 입력하기
+
 @app.post("/api/prompts")
 def create_prompt(content: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     logging.debug(f"Received request to create prompt with content: {content} for user ID: {current_user.id}")
     try:
+        # 데이터베이스에 프롬프트 저장
         prompt_data = {"content": content, "user_id": current_user.id, "created_at": datetime.now()}
         new_prompt = crud.create_record(db=db, model=Prompt, **prompt_data)
         logging.debug(f"Created new prompt: {new_prompt}")
+
+        # 저장된 프롬프트 데이터를 SECOND_API_URL로 전송
+        response = requests.post(SECOND_API_URL, json={"content": content})
+        
+        if response.status_code != 200:
+            logging.error(f"Failed to send data to second API: {response.text}")
+            raise HTTPException(status_code=500, detail="Failed to send data to second API")
+
+        logging.debug(f"Successfully sent data to second API: {response.json()}")
+        
+        # 저장된 프롬프트 데이터 반환
         return {column.name: getattr(new_prompt, column.name) for column in new_prompt.__table__.columns}
+
     except Exception as e:
         logging.error(f"Error creating prompt: {e}")
         raise HTTPException(status_code=500, detail=f"Error creating prompt: {e}")
