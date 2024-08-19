@@ -170,7 +170,7 @@ def create_prompt(content: str = Form(...), db: Session = Depends(get_db), curre
         logging.debug(f"Created new prompt: {new_prompt}")
 
         # 저장된 프롬프트 데이터를 SECOND_API_URL로 전송
-        response = requests.post(SECOND_API_URL, json={"content": content})
+        response = requests.post(SECOND_API_URL, json=prompt_data)
         
         if response.status_code != 200:
             logging.error(f"Failed to send data to second API: {response.text}")
