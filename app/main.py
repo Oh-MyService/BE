@@ -230,28 +230,6 @@ async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...
     except Exception as e:
         raise HTTPException.status_code(500, detail=f"Error creating result: {e}")
     
-# 이미지 데이터베이스에 저장   
-@app.post("/api/save-image")
-async def save_image(prompt_id: int, image_data: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    try:
-        # base64로 인코딩된 이미지를 디코딩하여 BLOB 형태로 변환
-        image_blob = base64.b64decode(image_data)
-        
-        # 데이터베이스에 이미지 저장
-        result_data = {
-            "prompt_id": prompt_id,
-            "user_id": current_user.id,  # 현재 사용자 ID를 자동으로 설정
-            "image_data": image_blob,
-            "created_at": datetime.now()
-        }
-        db_result = crud.create_record(db=db, model=Result, **result_data)
-        
-        return {"message": "Image saved successfully", "result_id": db_result.id}
-    
-    except Exception as e:
-        logging.error(f"Error saving image: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save image")
-
 
 # 특정 prompt id에 대한 이미지 결과 모두 보기
 @app.get("/api/results/{prompt_id}")
@@ -259,13 +237,22 @@ def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_us
     try:
         prompt = crud.get_record(db=db, model=Prompt, record_id=prompt_id)
         if not prompt or prompt.user_id != current_user.id:
-            raise HTTPException.status_code(404, detail="Prompt not found or not authorized")
+            raise HTTPException(status_code=404, detail="Prompt not found or not authorized")
+        
         results = db.query(Result).filter(Result.prompt_id == prompt_id).all()
+        
+        # 이미지의 개수가 4개인지 확인
+        if len(results) != 4:
+            raise HTTPException(status_code=400, detail=f"Expected 4 images, but found {len(results)} images")
+        
         for result in results:
             result.image_data = base64.b64encode(result.image_data).decode('utf-8')
+        
         return results
+
     except Exception as e:
-        raise HTTPException.status_code(500, detail=f"Error fetching prompt results: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching prompt results: {e}")
+
 
 # 특정 user id에 대한 이미지 결과 모두 보기
 @app.get("/api/results/user/{user_id}")
@@ -288,31 +275,6 @@ def delete_result(result_id: int, db: Session = Depends(get_db), current_user: U
     crud.delete_record(db=db, model=Result, record_id=result_id)
     return {"message": "Result deleted successfully"}
 
-# 소연언니 코드 ??
-@app.get("/api/user_results")
-def get_user_results(request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    try:
-        user_id = current_user.id
-        results = db.query(Result).filter(Result.user_id == user_id).all()
-        collections = db.query(Collection).filter(Collection.user_id == user_id).all()
-        results_data = []
-        for result in results:
-            result_dict = {column.name: getattr(result, column.name) for column in result.__table__.columns}
-            result_dict["image_data"] = base64.b64encode(result_dict["image_data"]).decode('utf-8')
-            results_data.append(result_dict)
-        collections_data = []
-        for collection in collections:
-            collection_dict = {column.name: getattr(collection, column.name) for column in collection.__table__.columns}
-            collections_data.append(collection_dict)
-        if not collections_data:
-            collections_data = [{"message": "컬렉션이 비었습니다"}]
-        return {
-            "results": results_data,
-            "collections": collections_data
-        }
-    except Exception as e:
-        raise HTTPException.status_code(500, detail=f"Error fetching user results and collections: {e}")
-    
 
 ### collections ###
 # 컬랙션 만들기
