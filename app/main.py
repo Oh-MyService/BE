@@ -169,8 +169,13 @@ def create_prompt(content: str = Form(...), db: Session = Depends(get_db), curre
         new_prompt = crud.create_record(db=db, model=Prompt, **prompt_data)
         logging.debug(f"Created new prompt: {new_prompt}")
 
-        # 저장된 프롬프트 데이터를 SECOND_API_URL로 전송
-        response = requests.post(SECOND_API_URL, json=prompt_data)
+        # 프롬프트 ID를 포함하여 데이터 전송
+        ai_input_data = {
+            "user_id": current_user.id, 
+            "prompt_id": new_prompt.id,  # new_prompt.id 사용
+            "content": content
+        }
+        response = requests.post(SECOND_API_URL, json=ai_input_data)
         
         if response.status_code != 200:
             logging.error(f"Failed to send data to second API: {response.text}")
@@ -184,6 +189,7 @@ def create_prompt(content: str = Form(...), db: Session = Depends(get_db), curre
     except Exception as e:
         logging.error(f"Error creating prompt: {e}")
         raise HTTPException(status_code=500, detail=f"Error creating prompt: {e}")
+
     
 
 # 특정 user id에 대한 프롬프트 모두 보기
