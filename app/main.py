@@ -243,12 +243,12 @@ def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_us
         
         # 이미지의 개수가 4개인지 확인
         if len(results) != 4:
-            raise HTTPException(status_code=400, detail=f"Expected 4 images, but found {len(results)} images")
+            return {"message": f"Expected 4 images, but found {len(results)} images", "results": results}
         
         for result in results:
             result.image_data = base64.b64encode(result.image_data).decode('utf-8')
         
-        return results
+        return {"message": "Successfully fetched all images for the prompt", "results": results}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching prompt results: {e}")
