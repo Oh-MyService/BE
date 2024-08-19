@@ -155,32 +155,32 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 
 ### prompts ###
-
 # 이미지 생성 요청을 보낼 다른 FastAPI의 URL
 SECOND_API_URL = "http://112.152.14.116:27272/generate-image"
 
 @app.post("/api/prompts/")
-async def create_prompt(content: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user), token: str = Depends(oauth2_scheme)):
+async def create_prompt(content: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         # 1. 프롬프트를 데이터베이스에 저장
         new_prompt = crud.create_record(db=db, model=Prompt, content=content, user_id=current_user.id, created_at=datetime.now())
         db.commit()
 
-        # 2. 다른 FastAPI 애플리케이션에 프롬프트 전달할 때 JWT 토큰을 포함
-        headers = {
-            "Authorization": f"Bearer {token}",  # JWT 토큰을 헤더에 포함
-            "Content-Type": "application/json"
+        # 2. 외부 FastAPI 애플리케이션에 user_id, prompt_id, content 전송
+        payload = {
+            "user_id": current_user.id,
+            "prompt_id": new_prompt.id,
+            "content": content
         }
-        response = requests.post(SECOND_API_URL, json={"prompt_id": new_prompt.id, "content": content}, headers=headers)
+        response = requests.post(SECOND_API_URL, json=payload)
         
         if response.status_code != 200:
-            raise HTTPException(status_code=500, detail="Failed to generate image from external service")
+            raise HTTPException(status_code=500, detail="외부 서비스에서 이미지 생성에 실패했습니다.")
         
-        return {"message": "Prompt saved and image generation started", "prompt_id": new_prompt.id}
+        return {"message": "프롬프트가 저장되고 이미지 생성이 시작되었습니다.", "prompt_id": new_prompt.id}
     except Exception as e:
-        logging.error(f"Error creating prompt: {e}")
+        logging.error(f"프롬프트 생성 중 오류 발생: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail="Failed to create prompt")
+        raise HTTPException(status_code=500, detail="프롬프트 생성에 실패했습니다.")
 
 # 특정 user id에 대한 프롬프트 모두 보기
 @app.get("/api/prompts/user/{user_id}")
