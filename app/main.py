@@ -158,16 +158,30 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 # 이미지 생성 요청을 보낼 다른 FastAPI의 URL
 SECOND_API_URL = "http://112.152.14.116:27272/generate-image"
 
-# prompt 입력하기
 @app.post("/api/prompts")
 def create_prompt(
     content: str = Form(...),
-    ai_option: Optional[Dict] = Form(None),
+    width: Optional[int] = Form(512),  # 기본값 512
+    height: Optional[int] = Form(512),  # 기본값 512
+    background_color: Optional[str] = Form("white"),  # 기본값 "white"
+    cfg_scale: Optional[int] = Form(10),  # 기본값 10
+    sampling_steps: Optional[int] = Form(50),  # 기본값 50
+    seed: Optional[int] = Form(0),  # 기본값 0
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    logging.debug(f"Received request to create prompt with content: {content}, ai_option: {ai_option} for user ID: {current_user.id}")
+    logging.debug(f"Received request to create prompt with content: {content} for user ID: {current_user.id}")
     try:
+        # ai_option 데이터 생성
+        ai_option = {
+            "width": width,
+            "height": height,
+            "background_color": background_color,
+            "cfg_scale": cfg_scale,
+            "sampling_steps": sampling_steps,
+            "seed": seed
+        }
+
         # 데이터베이스에 프롬프트 저장
         prompt_data = {
             "content": content,
@@ -180,19 +194,19 @@ def create_prompt(
 
         # 프롬프트 ID를 포함하여 데이터 전송
         ai_input_data = {
-            "user_id": current_user.id, 
+            "user_id": current_user.id,
             "prompt_id": new_prompt.id,
             "content": content,
-            "ai_option": ai_option  
+            "ai_option": ai_option 
         }
         response = requests.post(SECOND_API_URL, json=ai_input_data)
-        
+
         if response.status_code != 200:
             logging.error(f"Failed to send data to second API: {response.text}")
             raise HTTPException(status_code=500, detail="Failed to send data to second API")
 
         logging.debug(f"Successfully sent data to second API: {response.json()}")
-        
+
         # 저장된 프롬프트 데이터 반환
         return {column.name: getattr(new_prompt, column.name) for column in new_prompt.__table__.columns}
 
