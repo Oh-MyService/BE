@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, Request, Form, UploadFile, File, status
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional
+from typing import Optional, Dict
 from pydantic import create_model
 from dotenv import load_dotenv
 import base64
@@ -159,21 +159,31 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 SECOND_API_URL = "http://112.152.14.116:27272/generate-image"
 
 # prompt 입력하기
-
 @app.post("/api/prompts")
-def create_prompt(content: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    logging.debug(f"Received request to create prompt with content: {content} for user ID: {current_user.id}")
+def create_prompt(
+    content: str = Form(...),
+    ai_option: Optional[Dict] = Form(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    logging.debug(f"Received request to create prompt with content: {content}, ai_option: {ai_option} for user ID: {current_user.id}")
     try:
         # 데이터베이스에 프롬프트 저장
-        prompt_data = {"content": content, "user_id": current_user.id, "created_at": datetime.now()}
+        prompt_data = {
+            "content": content,
+            "ai_option": ai_option, 
+            "user_id": current_user.id,
+            "created_at": datetime.now()
+        }
         new_prompt = crud.create_record(db=db, model=Prompt, **prompt_data)
         logging.debug(f"Created new prompt: {new_prompt}")
 
         # 프롬프트 ID를 포함하여 데이터 전송
         ai_input_data = {
             "user_id": current_user.id, 
-            "prompt_id": new_prompt.id,  # new_prompt.id 사용
-            "content": content
+            "prompt_id": new_prompt.id,
+            "content": content,
+            "ai_option": ai_option  
         }
         response = requests.post(SECOND_API_URL, json=ai_input_data)
         
@@ -190,7 +200,6 @@ def create_prompt(content: str = Form(...), db: Session = Depends(get_db), curre
         logging.error(f"Error creating prompt: {e}")
         raise HTTPException(status_code=500, detail=f"Error creating prompt: {e}")
 
-    
 
 # 특정 user id에 대한 프롬프트 모두 보기
 @app.get("/api/prompts/user/{user_id}")
