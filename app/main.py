@@ -161,12 +161,12 @@ SECOND_API_URL = "http://112.152.14.116:27272/generate-image"
 @app.post("/api/prompts")
 def create_prompt(
     content: str = Form(...),
-    width: Optional[int] = Form(512),  # 기본값 512
-    height: Optional[int] = Form(512),  # 기본값 512
-    background_color: Optional[str] = Form("white"),  # 기본값 "white"
-    cfg_scale: Optional[int] = Form(10),  # 기본값 10
-    sampling_steps: Optional[int] = Form(50),  # 기본값 50
-    seed: Optional[int] = Form(0),  # 기본값 0
+    width: Optional[int] = Form(...),  
+    height: Optional[int] = Form(...),  
+    background_color: Optional[str] = Form(...),  
+    cfg_scale: Optional[int] = Form(...), 
+    sampling_steps: Optional[int] = Form(...),  
+    seed: Optional[int] = Form(...),  
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
