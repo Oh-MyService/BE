@@ -163,27 +163,30 @@ def create_prompt(
     content: str = Form(...),  
     width: Optional[int] = None,  
     height: Optional[int] = None,  
-    background_color: Optional[str] = None, 
+    background_color: Optional[str] = None,  
     pattern: Optional[int] = None,  
     mood: Optional[str] = None,  
-    cfg_scale: Optional[int] = None, 
-    sampling_steps: Optional[int] = None, 
-    seed: Optional[int] = None, 
+    cfg_scale: Optional[int] = None,  
+    sampling_steps: Optional[int] = None,  
+    seed: Optional[int] = None,  
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     logging.debug(f"Received request to create prompt with content: {content} for user ID: {current_user.id}")
     try:
         ai_option = {
-            "width": width,
-            "height": height,
-            "background_color": background_color,
-            "pattern": pattern,
-            "mood": mood,
-            "cfg_scale": cfg_scale,
-            "sampling_steps": sampling_steps,
-            "seed": seed
+            "width": int(width) if width is not None else None,
+            "height": int(height) if height is not None else None,
+            "background_color": str(background_color) if background_color is not None else None,
+            "pattern": int(pattern) if pattern is not None else None,
+            "mood": str(mood) if mood is not None else None,
+            "cfg_scale": int(cfg_scale) if cfg_scale is not None else None,
+            "sampling_steps": int(sampling_steps) if sampling_steps is not None else None,
+            "seed": int(seed) if seed is not None else None
         }
+
+        # None 값 제거
+        ai_option = {k: v for k, v in ai_option.items() if v is not None}
 
         prompt_data = {
             "content": content,
@@ -194,7 +197,6 @@ def create_prompt(
         new_prompt = crud.create_record(db=db, model=Prompt, **prompt_data)
         logging.debug(f"Created new prompt: {new_prompt}")
 
-        # Send data including the prompt ID
         ai_input_data = {
             "user_id": current_user.id,
             "prompt_id": new_prompt.id,
@@ -209,7 +211,6 @@ def create_prompt(
 
         logging.debug(f"Successfully sent data to second API: {response.json()}")
 
-        # Return the saved prompt data
         return {column.name: getattr(new_prompt, column.name) for column in new_prompt.__table__.columns}
 
     except Exception as e:
