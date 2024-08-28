@@ -3,7 +3,6 @@ uvicorn[standard]
 pymysql
 sqlalchemy
 python-dotenv
-redis
 itsdangerous
 httpx
 python-multipart
@@ -16,7 +15,6 @@ bcrypt
 cryptography
 python-jose
 passlib
-redis
 
 pika
 celery

@@ -63,7 +63,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # JWT secret and algorithm
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60  # 나중에 수정 필요
+ACCESS_TOKEN_EXPIRE_MINUTES = 180  # 나중에 수정 필요
 
 ### users ###
 def get_user_by_username(db: Session, username: str):
@@ -164,6 +164,8 @@ def create_prompt(
     width: Optional[int] = Form(...),  
     height: Optional[int] = Form(...),  
     background_color: Optional[str] = Form(...),  
+    pattern: Optional[int] = Form(...),
+    mood: Optional[str] = Form(...),  
     cfg_scale: Optional[int] = Form(...), 
     sampling_steps: Optional[int] = Form(...),  
     seed: Optional[int] = Form(...),  
@@ -177,6 +179,8 @@ def create_prompt(
             "width": width,
             "height": height,
             "background_color": background_color,
+            "pattern": pattern, 
+            "mood": mood,
             "cfg_scale": cfg_scale,
             "sampling_steps": sampling_steps,
             "seed": seed
