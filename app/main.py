@@ -160,48 +160,46 @@ SECOND_API_URL = "http://112.152.14.116:27272/generate-image"
 
 @app.post("/api/prompts")
 def create_prompt(
-    content: str = Form(...),
-    width: Optional[int] = Form(...),  
-    height: Optional[int] = Form(...),  
-    background_color: Optional[str] = Form(...),  
-    pattern: Optional[int] = Form(...),
-    mood: Optional[str] = Form(...),  
-    cfg_scale: Optional[int] = Form(...), 
-    sampling_steps: Optional[int] = Form(...),  
-    seed: Optional[int] = Form(...),  
+    content: str = Form(...),  
+    width: Optional[int] = None,  
+    height: Optional[int] = None,  
+    background_color: Optional[str] = None, 
+    pattern: Optional[int] = None,  
+    mood: Optional[str] = None,  
+    cfg_scale: Optional[int] = None, 
+    sampling_steps: Optional[int] = None, 
+    seed: Optional[int] = None, 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     logging.debug(f"Received request to create prompt with content: {content} for user ID: {current_user.id}")
     try:
-        # ai_option 데이터 생성
         ai_option = {
             "width": width,
             "height": height,
             "background_color": background_color,
-            "pattern": pattern, 
+            "pattern": pattern,
             "mood": mood,
             "cfg_scale": cfg_scale,
             "sampling_steps": sampling_steps,
             "seed": seed
         }
 
-        # 데이터베이스에 프롬프트 저장
         prompt_data = {
             "content": content,
-            "ai_option": ai_option, 
+            "ai_option": ai_option,
             "user_id": current_user.id,
             "created_at": datetime.now()
         }
         new_prompt = crud.create_record(db=db, model=Prompt, **prompt_data)
         logging.debug(f"Created new prompt: {new_prompt}")
 
-        # 프롬프트 ID를 포함하여 데이터 전송
+        # Send data including the prompt ID
         ai_input_data = {
             "user_id": current_user.id,
             "prompt_id": new_prompt.id,
             "content": content,
-            "ai_option": ai_option 
+            "ai_option": ai_option
         }
         response = requests.post(SECOND_API_URL, json=ai_input_data)
 
@@ -211,7 +209,7 @@ def create_prompt(
 
         logging.debug(f"Successfully sent data to second API: {response.json()}")
 
-        # 저장된 프롬프트 데이터 반환
+        # Return the saved prompt data
         return {column.name: getattr(new_prompt, column.name) for column in new_prompt.__table__.columns}
 
     except Exception as e:
