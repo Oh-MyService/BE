@@ -203,6 +203,7 @@ def create_prompt(
             "content": content,
             "ai_option": ai_option
         }
+        logging.debug(f"ai_option: {ai_input_data.ai_option}")
         response = requests.post(SECOND_API_URL, json=ai_input_data)
 
         if response.status_code != 200:
