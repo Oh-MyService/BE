@@ -185,8 +185,8 @@ def create_prompt(
             "seed": int(seed) if seed is not None else None
         }
 
-        # None 값 제거 << 일단 주석처리 (왜 필요한지 모르겠음)
-        #ai_option = {k: v for k, v in ai_option.items() if v is not None}
+        # None 값 제거
+        ai_option = {k: v for k, v in ai_option.items() if v is not None}
 
         prompt_data = {
             "content": content,
