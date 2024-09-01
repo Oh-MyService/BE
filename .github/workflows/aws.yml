@@ -57,7 +57,7 @@ jobs:
         mkdir -p ~/.ssh
         chmod 700 ~/.ssh
 
-    - name: Copy .env file to Lightsail instance
+    - name: Copy .env file to Lightsail instance using SSH agent
       run: |
         scp -o StrictHostKeyChecking=no .env $SSH_USERNAME@$LIGHTSAIL_INSTANCE_IP:/home/$SSH_USERNAME/.env
 
