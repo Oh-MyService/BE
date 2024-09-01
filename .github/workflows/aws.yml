@@ -8,7 +8,7 @@ env:
   AWS_REGION: us-east-1
   LIGHTSAIL_INSTANCE_IP: ${{ secrets.LIGHTSAIL_INSTANCE_IP }}
   SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
-  SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }} # 비밀번호를 위한 새로운 환경 변수
+  SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }} # 비밀번호를 위한 환경 변수
   SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
 
 jobs:
@@ -48,6 +48,10 @@ jobs:
 
     - name: Install SSH client and sshpass
       run: sudo apt-get install -y openssh-client sshpass
+
+    - name: Ensure .env directory exists on Lightsail instance
+      run: |
+        sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no $SSH_USERNAME@$LIGHTSAIL_INSTANCE_IP "mkdir -p /home/$SSH_USERNAME"
 
     - name: Copy .env file to Lightsail instance
       run: |
