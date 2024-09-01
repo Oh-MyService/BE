@@ -50,11 +50,12 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y openssh-client sshpass
 
-    - name: Copy SSH key
+    - name: Set up SSH agent and add private key
       run: |
+        eval "$(ssh-agent -s)"
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' | ssh-add -
         mkdir -p ~/.ssh
-        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/id_rsa
+        chmod 700 ~/.ssh
 
     - name: Copy .env file to Lightsail instance
       run: |
