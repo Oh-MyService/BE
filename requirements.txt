@@ -15,7 +15,3 @@ bcrypt
 cryptography
 python-jose
 passlib
-
-pika
-celery
-requests
