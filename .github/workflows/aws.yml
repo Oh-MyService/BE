@@ -8,7 +8,7 @@ env:
   AWS_REGION: us-east-1
   LIGHTSAIL_INSTANCE_IP: ${{ secrets.LIGHTSAIL_INSTANCE_IP }}
   SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
-  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+  SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
 
 jobs:
   deploy:
@@ -46,22 +46,13 @@ jobs:
         echo "backend_image=$REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
     - name: Install SSH and sshpass
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y openssh-client sshpass
+      run: sudo apt-get install -y openssh-client sshpass
 
-    - name: Set up SSH agent and add private key
+    - name: Copy .env file to Lightsail instance using sshpass
       run: |
-        eval "$(ssh-agent -s)"
-        echo "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' | ssh-add -
-        mkdir -p ~/.ssh
-        chmod 700 ~/.ssh
+        sshpass -p "${{ secrets.SSH_PASSWORD }}" scp -o StrictHostKeyChecking=no .env $SSH_USERNAME@$LIGHTSAIL_INSTANCE_IP:/home/$SSH_USERNAME/.env
 
-    - name: Copy .env file to Lightsail instance using SSH agent
-      run: |
-        scp -o StrictHostKeyChecking=no .env $SSH_USERNAME@$LIGHTSAIL_INSTANCE_IP:/home/$SSH_USERNAME/.env
-
-    - name: Deploy to Amazon Lightsail
+    - name: Deploy to Amazon Lightsail using sshpass
       env:
         BACKEND_IMAGE: ${{ steps.build-fastapi-image.outputs.backend_image }}
       run: |
