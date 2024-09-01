@@ -8,7 +8,7 @@ env:
   AWS_REGION: us-east-1
   LIGHTSAIL_INSTANCE_IP: ${{ secrets.LIGHTSAIL_INSTANCE_IP }}
   SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
-  SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }} # 비밀번호를 위한 환경 변수
+  SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
   SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
 
 jobs:
@@ -62,15 +62,25 @@ jobs:
         BACKEND_IMAGE: ${{ steps.build-fastapi-image.outputs.backend_image }}
       run: |
         sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no $SSH_USERNAME@$LIGHTSAIL_INSTANCE_IP << EOF
+          set -e
           BACKEND_IMAGE=${BACKEND_IMAGE}
-          
-          # Pull the images
+
+          # Pull the latest image
           sudo docker pull \\$BACKEND_IMAGE
-          
+
           # Stop and remove existing containers
           sudo docker stop fastapi_app || true
           sudo docker rm fastapi_app || true
-          
-          # Run new container
-          sudo docker run -d --name fastapi_app --env-file /home/$SSH_USERNAME/.env -p 28282:8000 \\$BACKEND_IMAGE
+
+          # Run the new container with Uvicorn's recommended settings
+          sudo docker run -d --name fastapi_app \
+            --env-file /home/$SSH_USERNAME/.env \
+            -p 28282:8000 \
+            --restart unless-stopped \
+            \\$BACKEND_IMAGE \
+            uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --lifespan on
+
+          # Output logs for debugging
+          sleep 5
+          sudo docker logs fastapi_app || true
         EOF
