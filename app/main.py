@@ -29,6 +29,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 origins = [
     "http://118.67.128.129:28282",
     "http://118.67.128.129:25252",
+    "http://118.67.128.129:27272",
     "http://112.152.14.116:27272",
 ]
 
@@ -152,7 +153,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 ### prompts ###
 # 이미지 생성 요청을 보낼 다른 FastAPI의 URL
-SECOND_API_URL = "http://112.152.14.116:27272/generate-image"
+SECOND_API_URL = "http://118.67.128.129:27272/generate-image"
 
 @app.post("/api/prompts")
 def create_prompt(
