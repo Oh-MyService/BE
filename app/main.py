@@ -163,7 +163,7 @@ def create_prompt(
     background_color: Optional[str] = Form(...),  
     pattern: Optional[int] = Form(...),  
     mood: Optional[str] = Form(...),  
-    cfg_scale: Optional[int] = Form(...),  
+    cfg_scale: Optional[float] = Form(...),  # 수정된 부분
     sampling_steps: Optional[int] = Form(...),  
     seed: Optional[int] = Form(...),  
     db: Session = Depends(get_db),
@@ -177,7 +177,7 @@ def create_prompt(
             "background_color": str(background_color) if background_color is not None else None,
             "pattern": int(pattern) if pattern is not None else None,
             "mood": str(mood) if mood is not None else None,
-            "cfg_scale": int(cfg_scale) if cfg_scale is not None else None,
+            "cfg_scale": float(cfg_scale) if cfg_scale is not None else None,  # 수정된 부분
             "sampling_steps": int(sampling_steps) if sampling_steps is not None else None,
             "seed": int(seed) if seed is not None else None
         }
