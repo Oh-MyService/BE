@@ -163,7 +163,7 @@ def create_prompt(
     background_color: Optional[str] = Form(...),  
     pattern: Optional[int] = Form(...),  
     mood: Optional[str] = Form(...),  
-    cfg_scale: Optional[float] = Form(...),  # 수정된 부분
+    cfg_scale: Optional[float] = Form(...),  
     sampling_steps: Optional[int] = Form(...),  
     seed: Optional[int] = Form(...),  
     db: Session = Depends(get_db),
@@ -194,6 +194,7 @@ def create_prompt(
         new_prompt = crud.create_record(db=db, model=Prompt, **prompt_data)
         logging.debug(f"Created new prompt: {new_prompt}")
 
+        # 외부 FastAPI로 프롬프트 전송
         ai_input_data = {
             "user_id": current_user.id,
             "prompt_id": new_prompt.id,
@@ -242,17 +243,17 @@ def get_prompt(prompt_id: int, db: Session = Depends(get_db), current_user: User
 
 ### results ###
 # result 올리기 -> 테스트용 
-@app.post("/api/results")
-async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    try:
-        image_data = await image.read()
-        result_data = {"prompt_id": prompt_id, "user_id": current_user.id, "image_data": image_data, "created_at": datetime.now()}
-        db_result = crud.create_record(db=db, model=Result, **result_data)
-        db_result.image_data = base64.b64encode(db_result.image_data).decode('utf-8')
-        ResultResponse = sqlalchemy_to_pydantic(Result)
-        return ResultResponse.from_orm(db_result)
-    except Exception as e:
-        raise HTTPException.status_code(500, detail=f"Error creating result: {e}")
+# @app.post("/api/results")
+# async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+#     try:
+#         image_data = await image.read()
+#         result_data = {"prompt_id": prompt_id, "user_id": current_user.id, "image_data": image_data, "created_at": datetime.now()}
+#         db_result = crud.create_record(db=db, model=Result, **result_data)
+#         db_result.image_data = base64.b64encode(db_result.image_data).decode('utf-8')
+#         ResultResponse = sqlalchemy_to_pydantic(Result)
+#         return ResultResponse.from_orm(db_result)
+#     except Exception as e:
+#         raise HTTPException.status_code(500, detail=f"Error creating result: {e}")
     
 
 # 특정 prompt id에 대한 이미지 결과 모두 보기
@@ -270,7 +271,7 @@ def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_us
             return {"message": f"Expected 4 images, but found {len(results)} images", "results": results}
         
         for result in results:
-            result.image_data = base64.b64encode(result.image_data).decode('utf-8')
+            result.image_data = result.image_data  # MinIO URL
         
         return {"message": "Successfully fetched all images for the prompt", "results": results}
 
@@ -282,15 +283,20 @@ def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_us
 @app.get("/api/results/user/{user_id}")
 def get_user_results(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.id != user_id:
-        raise HTTPException.status_code(403, detail="Not authorized to access this user's results")
+        raise HTTPException(status_code=403, detail="Not authorized to access this user's results")
+    
     try:
         results = db.query(Result).filter(Result.user_id == user_id).all()
+
         for result in results:
-            result.image_data = base64.b64encode(result.image_data).decode('utf-8')
-        return results
-    except Exception as e:
-        raise HTTPException.status_code(500, detail=f"Error fetching user results: {e}")
+            result.image_data = result.image_data  # MinIO URL
+
+        return {"results": results}
     
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching user results: {e}")
+
+
 # 최근 생성 삭제
 @app.delete("/api/results/{result_id}", status_code=status.HTTP_200_OK)
 def delete_result(result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -396,54 +402,60 @@ def add_result_to_collection(collection_id: int, result_id: int = Form(...), db:
 def get_user_collections(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized to access this user's collections")
+
     try:
         collections = db.query(Collection).filter(Collection.user_id == user_id).all()
         collection_list = []
+
         for collection in collections:
             collection_data = {column.name: getattr(collection, column.name) for column in collection.__table__.columns}
             collection_results = db.query(CollectionResult).filter(CollectionResult.collection_id == collection.collection_id).all()
             images = []
+
             for collection_result in collection_results:
-                result = db.query(Result).filter(Result.result_id == collection_result.result_id).first()
+                result = db.query(Result).filter(Result.id == collection_result.result_id).first()
                 if result:
                     result_data = {column.name: getattr(result, column.name) for column in result.__table__.columns}
-                    result_data["image_data"] = base64.b64encode(result.image_data).decode('utf-8')
+                    result_data["image_data"] = result.image_data  # MinIO URL
                     images.append(result_data)
+
             collection_data["images"] = images
             collection_list.append(collection_data)
+        
         return {"collection_list": collection_list}
-    except Exception as e:
-        raise HTTPException.status_code(500, detail=f"Error fetching collections: {e}")
     
- # 해당 컬렉션 눌렀을 때 이미지 불러오기
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching collections: {e}")
+    
+# 특정 컬렉션 안의 이미지 결과 불러오기
 @app.get("/api/collections/{collection_id}/images")
 def get_collection_images(collection_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     logging.debug(f"Fetching images for collection_id: {collection_id} by user_id: {current_user.id}")
-    # Ensure the user owns the collection
+    
+    # 사용자가 해당 컬렉션의 소유자인지 확인
     collection = db.query(Collection).filter(Collection.collection_id == collection_id, Collection.user_id == current_user.id).first()
     if not collection:
         logging.error(f"Collection not found or not authorized for user_id: {current_user.id}")
         raise HTTPException(status_code=404, detail="Collection not found or not authorized")
     
     try:
-
         collection_results = db.query(CollectionResult).filter(CollectionResult.collection_id == collection_id).all()
-        logging.debug(f"Collection results: {collection_results}")
         images = []
 
         for collection_result in collection_results:
             result = db.query(Result).filter(Result.id == collection_result.result_id).first()
-            logging.debug(f"Fetched result: {result}")
             if result:
                 result_data = {column.name: getattr(result, column.name) for column in result.__table__.columns}
-                result_data["image_data"] = base64.b64encode(result.image_data).decode('utf-8')
+                result_data["image_data"] = result.image_data  # MinIO URL
                 images.append(result_data)
-                
+        
         return {"images": images}
+    
     except Exception as e:
         logging.error(f"Error fetching collection images: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching collection images: {e}")
-    
+
+
 # 컬랙션 삭제
 @app.delete("/api/collections/{collection_id}", status_code=status.HTTP_200_OK)
 def delete_collection(collection_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
