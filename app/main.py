@@ -66,20 +66,28 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 180  # 나중에 수정 필요
 def get_user_by_username(db: Session, username: str):
     return db.query(User).filter(User.username == username).first()
 
-UserCreate = create_model('UserCreate', username=(str, ...), password=(str, ...))
+UserCreate = create_model('UserCreate', username=(str, ...), password=(str, ...), email=(str, ...))
+
+UserCreate = create_model('UserCreate', username=(str, ...), password=(str, ...), email=(str, ...))
 
 @app.post("/register")
-def register_user(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+def register_user(username: str = Form(...), password: str = Form(...), email: str = Form(...), db: Session = Depends(get_db)):
     db_user = get_user_by_username(db, username=username)
     if db_user:
         raise HTTPException(status_code=400, detail="Username already registered")
+    
+    db_email = db.query(User).filter(User.email == email).first()
+    if db_email:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
     try:
         hashed_password = pwd_context.hash(password)
-        user_data = {"username": username, "hashed_password": hashed_password}
+        user_data = {"username": username, "hashed_password": hashed_password, "email": email}
         new_user = crud.create_record(db=db, model=User, **user_data)
         return {column.name: getattr(new_user, column.name) for column in new_user.__table__.columns}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating user: {e}")
+
 def authenticate_user(username: str, password: str, db: Session):
     user = get_user_by_username(db, username)
     if not user or not pwd_context.verify(password, user.hashed_password):
