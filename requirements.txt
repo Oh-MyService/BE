@@ -16,3 +16,4 @@ cryptography
 python-jose
 passlib
 requests
+redis

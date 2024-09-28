@@ -4,7 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, Dict
 from pydantic import create_model
 from dotenv import load_dotenv
-import base64
+import redis
+import json
 import os
 from datetime import datetime, timedelta
 import logging
@@ -531,6 +532,29 @@ def delete_image_from_collection(collection_id: int, result_id: int, db: Session
     except Exception as e:
         logging.error(f"Error deleting image from collection: {e}")
         raise HTTPException(status_code=500, detail=f"Error deleting image from collection: {e}")
+
+### AI ###
+# 이미지 생성 진척도 반환
+# Redis 클라이언트
+redis_client = redis.Redis(host='118.67.128.129', port=6379, db=0)
+
+@app.get("/progress/{task_id}")
+def get_task_progress(task_id: str):
+    try:
+        redis_key = f"task_progress:{task_id}"
+        progress_data = redis_client.get(redis_key)
+        
+        if not progress_data:
+            raise HTTPException(status_code=404, detail="Progress data not found")
+        
+        progress_info = json.loads(progress_data)
+        return {
+            "task_id": task_id,
+            "progress": progress_info.get("progress"),
+            "estimated_remaining_time": progress_info.get("estimated_remaining_time")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving progress: {e}")
 
 
 
