@@ -9,12 +9,16 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)  # Added length
-    email = Column(String(255), nullable=False, unique=True)  # Added length
+    email = Column(String(255), index=True, nullable=False, unique=True)  # Added length
     profileimg = Column(String(255))  # Added length
 
     prompts = relationship("Prompt", back_populates="user")
     results = relationship("Result", back_populates="user")
     collections = relationship("Collection", back_populates="user")
+    
+    hashed_password = Column(String, nullable=False)
+    reset_token = Column(String, unique=True, index=True, nullable=True)
+    reset_token_expires = Column(DateTime, nullable=True)
 
 ### Prompt 모델 ###
 class Prompt(Base):
@@ -58,4 +62,6 @@ class Collection(Base):
     user = relationship("User", back_populates="collections")
     result = relationship("Result", back_populates="collections")
     prompt = relationship("Prompt", back_populates="collections")
+
+    
     

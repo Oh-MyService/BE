@@ -52,3 +52,33 @@ def add_result_to_collection(db: Session, collection_id: int, result_id: int):
     collection.prompt_id = result.prompt_id  # result_id에 따른 prompt_id 설정
     db.commit()
     return collection
+
+# crud.py
+from sqlalchemy.orm import Session
+from . import models
+
+# 사용자 이메일로 사용자 정보 조회
+def get_user_by_email(db: Session, email: str):
+    return db.query(models.User).filter(models.User.email == email).first()
+
+# 비밀번호 재설정 토큰 저장
+def save_password_reset_token(db: Session, user_id: int, reset_token: str, expiration: datetime):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if user:
+        user.reset_token = reset_token
+        user.reset_token_expires = expiration
+        db.commit()
+
+# 토큰으로 사용자 조회
+def get_user_by_reset_token(db: Session, reset_token: str):
+    return db.query(models.User).filter(models.User.reset_token == reset_token).first()
+
+# 비밀번호 업데이트
+def update_user_password(db: Session, user_id: int, new_password: str):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if user:
+        user.hashed_password = new_password
+        user.reset_token = None  # 토큰 무효화
+        user.reset_token_expires = None  # 토큰 만료 시간 초기화
+        db.commit()
+

@@ -9,9 +9,15 @@ from dotenv import load_dotenv
 from . import crud, models, schemas
 from .database import SessionLocal, engine
 import base64
-import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pydantic import BaseModel
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import os
+from passlib.context import CryptContext
+import uuid
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -272,6 +278,88 @@ def get_user_collections(request: Request, db: Session = Depends(get_db)):
         })
 
     return collections_data
+
+
+#비밀번호 재설정
+load_dotenv()
+# Gmail SMTP 서버 설정
+SMTP_SERVER = "smtp.gmail.com"
+SMTP_PORT = 587  # TLS 포트
+SMTP_USER = os.getenv("GMAIL_USER")  # Gmail 계정 이메일 주소
+SMTP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")  # 앱 비밀번호 또는 Gmail 비밀번호
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# 이메일 전송 함수
+def send_reset_email(to_email: str, reset_token: str):
+    sender_email = SMTP_USER
+    subject = "비밀번호 재설정 링크"
+    reset_link = f"http://118.67.128.129:25252/reset-password?token={reset_token}"
+
+    # 이메일 내용 구성
+    message = MIMEMultipart()
+    message['From'] = sender_email
+    message['To'] = to_email
+    message['Subject'] = subject
+    body = f"비밀번호를 재설정하려면 아래 링크를 클릭하세요:\n\n{reset_link}"
+    message.attach(MIMEText(body, 'plain'))
+
+    try:
+        # SMTP 서버에 연결
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()  # TLS 보안 활성화
+        server.login(SMTP_USER, SMTP_PASSWORD)  # SMTP 서버에 로그인
+        server.sendmail(SMTP_USER, to_email, message.as_string())  # 이메일 전송
+        server.quit()  # 서버 연결 종료
+        print(f"이메일 전송 성공: {to_email}")
+    except Exception as e:
+        print(f"이메일 전송 실패: {e}")
+
+# Dependency to get the database session
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@app.post("/password-reset-request/")
+async def password_reset_request(email: str, db: Session = Depends(get_db)):
+    # 입력된 이메일로 사용자 정보 확인
+    user = crud.get_user_by_email(db, email=email)
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+    # 비밀번호 재설정 토큰 생성 (고유한 UUID)
+    reset_token = str(uuid.uuid4())
+    reset_token_expiration = datetime.utcnow() + timedelta(hours=1)  # 토큰 만료 시간 설정 (1시간)
+
+    # 토큰을 사용자 정보에 저장
+    crud.save_password_reset_token(db, user.id, reset_token, reset_token_expiration)
+
+    # 사용자에게 이메일 발송
+    send_reset_email(user.email, reset_token)
+
+    return {"message": "비밀번호 재설정 이메일이 전송되었습니다."}
+
+@app.post("/reset-password/")
+async def reset_password(token: str, new_password: str, db: Session = Depends(get_db)):
+    # 토큰으로 사용자 찾기
+    user = crud.get_user_by_reset_token(db, reset_token=token)
+    if not user:
+        raise HTTPException(status_code=400, detail="유효하지 않은 토큰입니다.")
+
+    # 토큰 만료 여부 확인
+    if user.reset_token_expires < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="토큰이 만료되었습니다.")
+
+    # 새 비밀번호 해시화
+    hashed_password = pwd_context.hash(new_password)
+
+    # 비밀번호 업데이트 및 토큰 무효화
+    crud.update_user_password(db, user.id, hashed_password)
+
+    return {"message": "비밀번호가 성공적으로 변경되었습니다."}
 
 if __name__ == "__main__":
     import uvicorn
