@@ -323,7 +323,8 @@ def get_db():
     finally:
         db.close()
 
-@app.post("/password-reset-request/")
+#@app.post("/password-reset-request/")
+@app.post("/find-account/")
 async def password_reset_request(email: str, db: Session = Depends(get_db)):
     # 입력된 이메일로 사용자 정보 확인
     user = crud.get_user_by_email(db, email=email)
