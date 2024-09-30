@@ -26,6 +26,7 @@ from passlib.context import CryptContext
 from dotenv import load_dotenv
 from . import models, crud  # models.py, crud.py에서 정의된 함수와 클래스
 from .database import SessionLocal
+from datetime import datetime, timezone
 
 # Load environment variables
 load_dotenv()
@@ -611,7 +612,7 @@ def send_reset_email(to_email: str, reset_token: str):
         print(f"이메일 전송 실패: {e}")
 
 # 비밀번호 재설정 요청 (사용자가 이메일을 입력하여 토큰 요청)
-@app.post("/password-reset-request/")
+@app.post("/api/find-account")
 async def password_reset_request(email: str = Form(...), db: Session = Depends(get_db)):
     # 사용자 이메일로 사용자 조회
     user = crud.get_user_by_email(db, email=email)
@@ -620,7 +621,7 @@ async def password_reset_request(email: str = Form(...), db: Session = Depends(g
 
     # 고유한 비밀번호 재설정 토큰 생성 및 만료 시간 설정 (1시간 유효)
     reset_token = str(uuid.uuid4())
-    reset_token_expires = datetime.utcnow() + timedelta(hours=1)
+    reset_token_expires = datetime.now(timezone.utc) + timedelta(hours=1)
 
     # 토큰을 사용자 정보에 저장
     crud.save_password_reset_token(db, user.id, reset_token, reset_token_expires)
