@@ -1,366 +1,562 @@
-from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Form, Request
-from sqlalchemy.orm import Session, joinedload
+from fastapi import FastAPI, Depends, HTTPException, Request, Form, UploadFile, File, status
+from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.responses import RedirectResponse, FileResponse, JSONResponse
-from starlette.middleware.sessions import SessionMiddleware
-import httpx
-from typing import List, Optional
+from typing import Optional, Dict
+from pydantic import create_model
 from dotenv import load_dotenv
-from . import crud, models, schemas
-from .database import SessionLocal, engine
-import base64
-from datetime import datetime, timedelta
-from pydantic import BaseModel
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+import redis
+import json
 import os
+from datetime import datetime, timedelta
+import logging
 from passlib.context import CryptContext
-import uuid
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from jose import JWTError, jwt
+from app.database import get_db
+from . import crud
+from .models import User, Prompt, Result, Collection, CollectionResult
+from .utils import sqlalchemy_to_pydantic, create_access_token, decode_access_token, is_token_expired
+import requests
 
-
-# Load environment variables from .env file
+# Load environment variables
 load_dotenv()
 
-# Initialize the FastAPI app
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
 app = FastAPI()
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-# Add CORS middleware
+# Define origins
+origins = [
+    "http://118.67.128.129:28282",
+    "http://118.67.128.129:25252",
+    "http://118.67.128.129:27272",
+    "http://112.152.14.116:27272",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Add session middleware
-app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY", "supersecretkey"))
+@app.middleware("http")
+async def add_cors_headers(request, call_next):
+    logging.debug(f"Request origin: {request.headers.get('origin')}")
+    response = await call_next(request)
+    origin = request.headers.get('origin')
+    if origin in origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    logging.debug(f"Response headers: {response.headers}")
+    return response
 
-# OAuth2 settings
-CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-REDIRECT_URI = "http://localhost:8000/auth"
-AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/auth"
-TOKEN_URL = "https://oauth2.googleapis.com/token"
-USER_INFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
-
-current_dir = os.path.dirname(os.path.abspath(__file__))
-index_file = os.path.join(current_dir, "index.html")
-login_complete_file = os.path.join(current_dir, "login_complete.html")
-
-class AddResultToCollection(BaseModel):
-    result_id: int
-
-@app.get("/")
-async def read_root():
-    return FileResponse(index_file)
-
-@app.get("/login")
-async def login():
-    return RedirectResponse(
-        f"{AUTHORIZATION_URL}?response_type=code&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=openid%20email%20profile"
-    )
-
-# Dependency to get the database session
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-@app.get("/auth")
-async def auth(request: Request, code: str, db: Session = Depends(get_db)):
-    async with httpx.AsyncClient() as client:
-        token_response = await client.post(
-            TOKEN_URL,
-            data={
-                "code": code,
-                "client_id": CLIENT_ID,
-                "client_secret": CLIENT_SECRET,
-                "redirect_uri": REDIRECT_URI,
-                "grant_type": "authorization_code",
-            },
-        )
-        token_response_data = token_response.json()
-        access_token = token_response_data.get("access_token")
-        if not access_token:
-            raise HTTPException(status_code=401, detail="Invalid client credentials")
-
-        user_info_response = await client.get(
-            USER_INFO_URL,
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-        user_info = user_info_response.json()
-        email = user_info.get("email")
-        name = user_info.get("name")
-        picture = user_info.get("picture")
-
-        # 사용자 정보 저장 로직
-        db_user = crud.get_user_by_email(db, email=email)
-        if not db_user:
-            user_data = schemas.UserCreate(email=email, name=name, picture=picture)
-            db_user = crud.create_user(db=db, user=user_data)
-
-        # 사용자 정보 세션에 저장
-        request.session['user_info'] = {"user_id": db_user.id, "email": email, "name": name, "picture": picture}
-
-        # Redirect to login complete page
-        return RedirectResponse(url="/login-complete")
-
-@app.get("/login-complete")
-async def login_complete():
-    return FileResponse(login_complete_file)
-
-@app.get("/user_info")
-async def get_user_info(request: Request):
-    user_info = request.session.get('user_info')
-    if user_info:
-        return JSONResponse(content=user_info)
-    else:
-        raise HTTPException(status_code=401, detail="User not authenticated")
-
-@app.post("/prompts/", response_model=schemas.Prompt)
-def create_prompt(prompt_data: schemas.PromptCreate, db: Session = Depends(get_db)):
-    return crud.create_prompt(db=db, prompt_content=prompt_data.content, user_id=prompt_data.user_id)
-
-@app.get("/prompts/{prompt_id}", response_model=schemas.Prompt)
-def read_prompt(prompt_id: int, db: Session = Depends(get_db)):
-    db_prompt = crud.get_prompt(db, prompt_id=prompt_id)
-    if db_prompt is None:
-        raise HTTPException(status_code=404, detail="Prompt not found")
-    return db_prompt
-
-@app.post("/results/", response_model=schemas.Result)
-async def create_result(prompt_id: int = Form(...), user_id: int = Form(...), image: UploadFile = File(...), db: Session = Depends(get_db)):
-    image_data = await image.read()
-    db_result = crud.create_result(db=db, prompt_id=prompt_id, image_data=image_data, user_id=user_id)
-    db_result.image_data = base64.b64encode(db_result.image_data).decode('utf-8')
-    return db_result
-
-@app.get("/results/", response_model=List[schemas.Result])
-def get_all_results(db: Session = Depends(get_db)):
-    results = crud.get_all_results(db)
-    for result in results:
-        result.image_data = base64.b64encode(result.image_data).decode('utf-8')
-    return results
-
-@app.get("/my-page")
-async def my_page():
-    return FileResponse(os.path.join(current_dir, "my_page.html"))
-
-@app.get("/user_results/")
-def get_user_results(request: Request, db: Session = Depends(get_db)):
-    user_info = request.session.get('user_info')
-    if not user_info:
-        raise HTTPException(status_code=401, detail="User not authenticated")
-
-    user_id = user_info['user_id']
-    results = db.query(models.Result).filter(models.Result.user_id == user_id).options(
-        joinedload(models.Result.user),
-        joinedload(models.Result.prompt)
-    ).all()
-
-    collections = db.query(models.Collection).filter(models.Collection.user_id == user_id).all()
-
-    # 결과를 사전 형태로 변환
-    results_data = []
-    for result in results:
-        result_data = {
-            "id": result.id,
-            "created_at": result.created_at,
-            "prompt_id": result.prompt_id,
-            "image_data": base64.b64encode(result.image_data).decode('utf-8'),
-            "user_id": result.user_id,
-        }
-        results_data.append(result_data)
-
-    # 컬렉션을 사전 형태로 변환
-    collections_data = []
-    for collection in collections:
-        collection_data = {
-            "collection_id": collection.collection_id,
-            "created_at": collection.created_at,
-            "user_id": collection.user_id,
-            "result_id": collection.result_id,
-            "prompt_id": collection.prompt_id,
-        }
-        collections_data.append(collection_data)
-
-    # 컬렉션이 비어있는 경우 메시지 추가
-    if not collections_data:
-        collections_data = [{"message": "컬렉션이 비었습니다"}]
-
-    return {
-        "results": results_data,
-        "collections": collections_data
-    }
-
-
-
-
-@app.post("/collections/", response_model=dict)
-def create_collection(request: Request, user_id: int = Form(...), result_id: Optional[int] = Form(None), prompt_id: Optional[int] = Form(None), db: Session = Depends(get_db)):
-    created_at = datetime.now()
-    new_collection = models.Collection(created_at=created_at, user_id=user_id, result_id=result_id, prompt_id=prompt_id)
-    db.add(new_collection)
-    db.commit()
-    db.refresh(new_collection)
-    
-    # 컬렉션을 사전 형태로 변환
-    collection_data = {
-        "collection_id": new_collection.collection_id,
-        "created_at": new_collection.created_at,
-        "user_id": new_collection.user_id,
-        "result_id": new_collection.result_id,
-        "prompt_id": new_collection.prompt_id,
-        "result": None,
-        "prompt": None
-    }
-    
-    if new_collection.result_id:
-        result = db.query(models.Result).filter(models.Result.id == new_collection.result_id).first()
-        collection_data["result"] = {
-            "id": result.id,
-            "created_at": result.created_at,
-            "prompt_id": result.prompt_id,
-            "image_data": base64.b64encode(result.image_data).decode('utf-8'),
-            "user_id": result.user_id,
-        }
-    
-    if new_collection.prompt_id:
-        prompt = db.query(models.Prompt).filter(models.Prompt.id == new_collection.prompt_id).first()
-        collection_data["prompt"] = {
-            "id": prompt.id,
-            "created_at": prompt.created_at,
-            "content": prompt.content,
-            "user_id": prompt.user_id,
-        }
-
-    return collection_data
-
-
-@app.post("/collections/{collection_id}/add_result")
-def add_result_to_collection(collection_id: int, data: AddResultToCollection, db: Session = Depends(get_db)):
-    collection = db.query(models.Collection).filter(models.Collection.collection_id == collection_id).first()
-    if not collection:
-        raise HTTPException(status_code=404, detail="Collection not found")
-
-    # 결과 ID 업데이트
-    collection.result_id = data.result_id
-    db.commit()
-    db.refresh(collection)
-
-    return {"message": "Result added to collection successfully"}
-
-
-@app.get("/user_collections/", response_model=List[schemas.Collection])
-def get_user_collections(request: Request, db: Session = Depends(get_db)):
-    user_info = request.session.get('user_info')
-    if not user_info:
-        raise HTTPException(status_code=401, detail="User not authenticated")
-
-    user_id = user_info['user_id']
-    collections = db.query(models.Collection).filter(models.Collection.user_id == user_id).all()
-
-    if not collections:
-        return [{"message": "컬렉션이 비었습니다"}]
-
-    collections_data = []
-    for collection in collections:
-        collections_data.append({
-            "collection_id": collection.collection_id,
-            "created_at": collection.created_at,
-            "user_id": collection.user_id,
-            "result_id": collection.result_id,
-            "prompt_id": collection.prompt_id,
-        })
-
-    return collections_data
-
-
-#비밀번호 재설정
-load_dotenv()
-# Gmail SMTP 서버 설정
-SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 587  # TLS 포트
-SMTP_USER = os.getenv("GMAIL_USER")  # Gmail 계정 이메일 주소
-SMTP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")  # 앱 비밀번호 또는 Gmail 비밀번호
-
+# Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# 이메일 전송 함수
-def send_reset_email(to_email: str, reset_token: str):
-    sender_email = SMTP_USER
-    subject = "비밀번호 재설정 링크"
-    reset_link = f"http://118.67.128.129:25252/reset-password?token={reset_token}"
+# JWT secret and algorithm
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 180  # 나중에 수정 필요
 
-    # 이메일 내용 구성
-    message = MIMEMultipart()
-    message['From'] = sender_email
-    message['To'] = to_email
-    message['Subject'] = subject
-    body = f"비밀번호를 재설정하려면 아래 링크를 클릭하세요:\n\n{reset_link}"
-    message.attach(MIMEText(body, 'plain'))
+### users ###
+def get_user_by_username(db: Session, username: str):
+    return db.query(User).filter(User.username == username).first()
 
+UserCreate = create_model('UserCreate', username=(str, ...), password=(str, ...), email=(str, ...))
+
+UserCreate = create_model('UserCreate', username=(str, ...), password=(str, ...), email=(str, ...))
+
+@app.post("/register")
+def register_user(username: str = Form(...), password: str = Form(...), email: str = Form(...), db: Session = Depends(get_db)):
+    db_user = get_user_by_username(db, username=username)
+    if db_user:
+        raise HTTPException(status_code=400, detail="Username already registered")
+    
+    db_email = db.query(User).filter(User.email == email).first()
+    if db_email:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
     try:
-        # SMTP 서버에 연결
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.starttls()  # TLS 보안 활성화
-        server.login(SMTP_USER, SMTP_PASSWORD)  # SMTP 서버에 로그인
-        server.sendmail(SMTP_USER, to_email, message.as_string())  # 이메일 전송
-        server.quit()  # 서버 연결 종료
-        print(f"이메일 전송 성공: {to_email}")
+        hashed_password = pwd_context.hash(password)
+        user_data = {"username": username, "hashed_password": hashed_password, "email": email}
+        new_user = crud.create_record(db=db, model=User, **user_data)
+        return {column.name: getattr(new_user, column.name) for column in new_user.__table__.columns}
     except Exception as e:
-        print(f"이메일 전송 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"Error creating user: {e}")
 
-# Dependency to get the database session
-def get_db():
-    db = SessionLocal()
+def authenticate_user(username: str, password: str, db: Session):
+    user = get_user_by_username(db, username)
+    if not user or not pwd_context.verify(password, user.hashed_password):
+        return False
+    return user
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+@app.post("/token")
+def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = authenticate_user(form_data.username, form_data.password, db)
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username, "user_id": user.id}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer", "user_id": user.id}
+def verify_token(token: str = Depends(oauth2_scheme)):
     try:
-        yield db
-    finally:
-        db.close()
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=403, detail="Token is invalid or expired")
+        return payload
+    except JWTError:
+        raise HTTPException(status_code=403, detail="Token is invalid or expired")
 
-#@app.post("/password-reset-request/")
-@app.post("/find-account/")
-async def password_reset_request(email: str, db: Session = Depends(get_db)):
-    # 입력된 이메일로 사용자 정보 확인
-    user = crud.get_user_by_email(db, email=email)
+@app.get("/verify-token/{token}")
+async def verify_user_token(token: str):
+    if is_token_expired(token):
+        raise HTTPException(status_code=403, detail="Token is expired")
+    verify_token(token=token)
+    return {"message": "Token is valid"}
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
+    try:
+        payload = decode_access_token(token)
+        logging.debug(f"Decoded token payload: {payload}")
+        if payload is None:
+            raise credentials_exception
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    
+    user = db.query(User).filter(User.username == username).first()
+    if user is None:
+        raise credentials_exception
+    
+    logging.debug(f"Authenticated user: {user.username}, ID: {user.id}")
+    return user
+
+
+# 비밀번호 번경
+@app.put("/change-password")
+def change_password(
+    new_password: str = Form(...), 
+    token: str = Depends(verify_token), 
+    db: Session = Depends(get_db)
+):
+    user_id = token.get("user_id")
+    user = db.query(User).filter(User.id == user_id).first()
+    
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
-
-    # 비밀번호 재설정 토큰 생성 (고유한 UUID)
-    reset_token = str(uuid.uuid4())
-    reset_token_expiration = datetime.utcnow() + timedelta(hours=1)  # 토큰 만료 시간 설정 (1시간)
-
-    # 토큰을 사용자 정보에 저장
-    crud.save_password_reset_token(db, user.id, reset_token, reset_token_expiration)
-
-    # 사용자에게 이메일 발송
-    send_reset_email(user.email, reset_token)
-
-    return {"message": "비밀번호 재설정 이메일이 전송되었습니다."}
-
-@app.post("/reset-password/")
-async def reset_password(token: str, new_password: str, db: Session = Depends(get_db)):
-    # 토큰으로 사용자 찾기
-    user = crud.get_user_by_reset_token(db, reset_token=token)
-    if not user:
-        raise HTTPException(status_code=400, detail="유효하지 않은 토큰입니다.")
-
-    # 토큰 만료 여부 확인
-    if user.reset_token_expires < datetime.utcnow():
-        raise HTTPException(status_code=400, detail="토큰이 만료되었습니다.")
-
-    # 새 비밀번호 해시화
+    
+    # 새 비밀번호 해싱
     hashed_password = pwd_context.hash(new_password)
-
-    # 비밀번호 업데이트 및 토큰 무효화
-    crud.update_user_password(db, user.id, hashed_password)
-
+    
+    # 사용자 비밀번호 업데이트
+    user.hashed_password = hashed_password
+    db.commit()
+    
     return {"message": "비밀번호가 성공적으로 변경되었습니다."}
+
+### prompts ###
+# 이미지 생성 요청을 보낼 다른 FastAPI의 URL
+SECOND_API_URL = "http://118.67.128.129:27272/generate-image"
+
+@app.post("/api/prompts")
+def create_prompt(
+    content: str = Form(...),  
+    width: Optional[int] = Form(...),  
+    height: Optional[int] = Form(...),  
+    background_color: Optional[str] = Form(...),  
+    pattern: Optional[int] = Form(...),  
+    mood: Optional[str] = Form(...),  
+    cfg_scale: Optional[float] = Form(...),  
+    sampling_steps: Optional[int] = Form(...),  
+    seed: Optional[int] = Form(...),  
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    logging.debug(f"Received request to create prompt with content: {content} for user ID: {current_user.id}")
+    try:
+        ai_option = {
+            "width": int(width) if width is not None else None,
+            "height": int(height) if height is not None else None,
+            "background_color": str(background_color) if background_color is not None else None,
+            "pattern": int(pattern) if pattern is not None else None,
+            "mood": str(mood) if mood is not None else None,
+            "cfg_scale": float(cfg_scale) if cfg_scale is not None else None,  # 수정된 부분
+            "sampling_steps": int(sampling_steps) if sampling_steps is not None else None,
+            "seed": int(seed) if seed is not None else None
+        }
+
+        # None 값 제거
+        ai_option = {k: v for k, v in ai_option.items() if v is not None}
+
+        prompt_data = {
+            "content": content,
+            "ai_option": ai_option,
+            "user_id": current_user.id,
+            "created_at": datetime.now()
+        }
+        new_prompt = crud.create_record(db=db, model=Prompt, **prompt_data)
+        logging.debug(f"Created new prompt: {new_prompt}")
+
+        # 외부 FastAPI로 프롬프트 전송
+        ai_input_data = {
+            "user_id": current_user.id,
+            "prompt_id": new_prompt.id,
+            "content": content,
+            "ai_option": ai_option
+        }
+        logging.debug(f"ai_option: {ai_input_data['ai_option']}")
+        response = requests.post(SECOND_API_URL, json=ai_input_data)
+
+        if response.status_code != 200:
+            logging.error(f"Failed to send data to second API: {response.text}")
+            raise HTTPException(status_code=500, detail="Failed to send data to second API")
+
+        logging.debug(f"Successfully sent data to second API: {response.json()}")
+
+        return {column.name: getattr(new_prompt, column.name) for column in new_prompt.__table__.columns}
+
+    except Exception as e:
+        logging.error(f"Error creating prompt: {e}")
+        raise HTTPException(status_code=500, detail=f"Error creating prompt: {e}")
+
+
+# 특정 user id에 대한 프롬프트 모두 보기
+@app.get("/api/prompts/user/{user_id}")
+def get_user_prompts(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.id != user_id:
+        logging.error("Not authorized to access this user's prompts")
+        raise HTTPException(status_code=403, detail="Not authorized to access this user's prompts")
+    try:
+        return db.query(Prompt).filter(Prompt.user_id == user_id).all()
+    except Exception as e:
+        logging.error(f"Error fetching user prompts: {e}")
+        raise HTTPException.status_code(500, detail=f"Error fetching user prompts: {e}")
+    
+# 특정 prompt id에 대한 프롬프트 보기
+@app.get("/api/prompts/{prompt_id}")
+def get_prompt(prompt_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    try:
+        prompt = crud.get_record(db=db, model=Prompt, record_id=prompt_id)
+        if not prompt or prompt.user_id != current_user.id:
+            raise HTTPException.status_code(404, detail="Prompt not found or not authorized")
+        return prompt
+    except Exception as e:
+        raise HTTPException.status_code(500, detail=f"Error fetching prompt: {e}")
+    
+
+### results ###
+# result 올리기 -> 테스트용 
+# @app.post("/api/results")
+# async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+#     try:
+#         image_data = await image.read()
+#         result_data = {"prompt_id": prompt_id, "user_id": current_user.id, "image_data": image_data, "created_at": datetime.now()}
+#         db_result = crud.create_record(db=db, model=Result, **result_data)
+#         db_result.image_data = base64.b64encode(db_result.image_data).decode('utf-8')
+#         ResultResponse = sqlalchemy_to_pydantic(Result)
+#         return ResultResponse.from_orm(db_result)
+#     except Exception as e:
+#         raise HTTPException.status_code(500, detail=f"Error creating result: {e}")
+    
+
+# 특정 prompt id에 대한 이미지 결과 모두 보기
+@app.get("/api/results/{prompt_id}")
+def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    try:
+        prompt = crud.get_record(db=db, model=Prompt, record_id=prompt_id)
+        if not prompt or prompt.user_id != current_user.id:
+            raise HTTPException(status_code=404, detail="Prompt not found or not authorized")
+        
+        results = db.query(Result).filter(Result.prompt_id == prompt_id).all()
+        
+        # 이미지의 개수가 4개인지 확인
+        if len(results) != 4:
+            return {"message": f"Expected 4 images, but found {len(results)} images", "results": results}
+        
+        for result in results:
+            result.image_data = result.image_data  # MinIO URL
+        
+        return {"message": "Successfully fetched all images for the prompt", "results": results}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching prompt results: {e}")
+
+
+# 특정 user id에 대한 이미지 결과 모두 보기
+@app.get("/api/results/user/{user_id}")
+def get_user_results(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this user's results")
+    
+    try:
+        results = db.query(Result).filter(Result.user_id == user_id).all()
+
+        for result in results:
+            result.image_data = result.image_data  # MinIO URL
+
+        return {"results": results}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching user results: {e}")
+
+
+# 최근 생성 삭제
+@app.delete("/api/results/{result_id}", status_code=status.HTTP_200_OK)
+def delete_result(result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    result = crud.get_record(db=db, model=Result, record_id=result_id)
+    if not result or result.user_id != current_user.id:raise HTTPException(status_code=404, detail="Result not found or not authorized")
+    crud.delete_record(db=db, model=Result, record_id=result_id)
+    return {"message": "Result deleted successfully"}
+
+
+### collections ###
+# 컬랙션 만들기
+@app.post("/api/collections")
+def create_collection_endpoint(collection_name: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    try:
+        # Create a new collection
+        new_collection = Collection(
+            created_at=datetime.now(),
+            user_id=current_user.id,
+            collection_name=collection_name
+        )
+        db.add(new_collection)
+        db.commit()
+        db.refresh(new_collection)
+        new_collection_result = CollectionResult(
+            collection_id=new_collection.collection_id,
+            result_id=None
+        )
+        db.add(new_collection_result)
+        db.commit()
+        db.refresh(new_collection_result)
+        return {
+            "collection": {column.name: getattr(new_collection, column.name) for column in new_collection.__table__.columns},
+            "collection_result": {column.name: getattr(new_collection_result, column.name) for column in new_collection_result.__table__.columns}
+        }
+    except Exception as e:
+        logging.error(f"Error creating collection: {e}")
+        raise HTTPException(status_code=500, detail=f"Error creating collection: {e}")
+    
+# 특정 user id에 대한 컬랙션 모두 보기
+@app.get("/api/collections/user/{user_id}")
+def get_user_collections(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.id != user_id:
+        logging.error(f"User {current_user.id} not authorized to access collections of user {user_id}")
+        raise HTTPException(status_code=403, detail="Not authorized to access this user's collections")
+    try:
+        logging.debug(f"Fetching collections for user_id: {user_id}")
+        collections = db.query(Collection).filter(Collection.user_id == user_id).all()
+        logging.debug(f"Fetched collections: {collections}")
+        if not collections:
+            logging.debug(f"No collections found for user_id: {user_id}")
+            return {"message": "No collections found"}
+        collection_list = [
+            {
+                "collection_id": collection.collection_id,
+                "user_id": collection.user_id,
+                "collection_name": collection.collection_name,
+                "created_at": collection.created_at.isoformat()
+            }
+            for collection in collections
+        ]
+        logging.debug(f"Collection list to be returned: {collection_list}")
+        return {"collection_list": collection_list}
+    except Exception as e:
+        logging.error(f"Error fetching collections: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching collections: {e}")
+    
+# 특정 이미지 컬랙션에 추가
+@app.post("/api/collections/{collection_id}/add_result")
+def add_result_to_collection(collection_id: int, result_id: int = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    collection = db.query(Collection).filter(Collection.collection_id == collection_id).first()
+    if not collection or collection.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Collection not found or not authorized")
+    
+    result = db.query(Result).filter(Result.id == result_id).first()
+    if not result or result.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Result not found or not authorized")
+    
+    # 중복된 이미지인지 확인
+    duplicate_result = db.query(CollectionResult).filter(
+        CollectionResult.collection_id == collection_id,
+        CollectionResult.result_id == result_id
+    ).first()
+    
+    if duplicate_result:
+        raise HTTPException(status_code=400, detail="Image is already in the collection")
+    
+    try:
+        new_collection_result = CollectionResult(collection_id=collection_id, result_id=result_id)
+        db.add(new_collection_result)
+        db.commit()
+        db.refresh(new_collection_result)
+        return {
+            "collection_result_id": new_collection_result.id,
+            "collection_id": new_collection_result.collection_id,
+            "result_id": new_collection_result.result_id
+        }
+    except Exception as e:
+        logging.error(f"Error adding result to collection: {e}")
+        raise HTTPException(status_code=500, detail=f"Error adding result to collection: {e}")
+
+# 컬랙션 목록 불러오기 -> 아카이브    
+@app.get("/api/collections/user/{user_id}")
+def get_user_collections(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this user's collections")
+
+    try:
+        collections = db.query(Collection).filter(Collection.user_id == user_id).all()
+        collection_list = []
+
+        for collection in collections:
+            collection_data = {column.name: getattr(collection, column.name) for column in collection.__table__.columns}
+            collection_results = db.query(CollectionResult).filter(CollectionResult.collection_id == collection.collection_id).all()
+            images = []
+
+            for collection_result in collection_results:
+                result = db.query(Result).filter(Result.id == collection_result.result_id).first()
+                if result:
+                    result_data = {column.name: getattr(result, column.name) for column in result.__table__.columns}
+                    result_data["image_data"] = result.image_data  # MinIO URL
+                    images.append(result_data)
+
+            collection_data["images"] = images
+            collection_list.append(collection_data)
+        
+        return {"collection_list": collection_list}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching collections: {e}")
+    
+# 특정 컬렉션 안의 이미지 결과 불러오기
+@app.get("/api/collections/{collection_id}/images")
+def get_collection_images(collection_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    logging.debug(f"Fetching images for collection_id: {collection_id} by user_id: {current_user.id}")
+    
+    # 사용자가 해당 컬렉션의 소유자인지 확인
+    collection = db.query(Collection).filter(Collection.collection_id == collection_id, Collection.user_id == current_user.id).first()
+    if not collection:
+        logging.error(f"Collection not found or not authorized for user_id: {current_user.id}")
+        raise HTTPException(status_code=404, detail="Collection not found or not authorized")
+    
+    try:
+        collection_results = db.query(CollectionResult).filter(CollectionResult.collection_id == collection_id).all()
+        images = []
+
+        for collection_result in collection_results:
+            result = db.query(Result).filter(Result.id == collection_result.result_id).first()
+            if result:
+                result_data = {column.name: getattr(result, column.name) for column in result.__table__.columns}
+                result_data["image_data"] = result.image_data  # MinIO URL
+                images.append(result_data)
+        
+        return {"images": images}
+    
+    except Exception as e:
+        logging.error(f"Error fetching collection images: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching collection images: {e}")
+
+
+# 컬랙션 삭제
+@app.delete("/api/collections/{collection_id}", status_code=status.HTTP_200_OK)
+def delete_collection(collection_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    collection = db.query(Collection).filter(Collection.collection_id == collection_id).first()
+    if not collection or collection.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Collection not found or not authorized")
+    try:
+        db.query(CollectionResult).filter(CollectionResult.collection_id == collection_id).delete()
+        db.query(Collection).filter(Collection.collection_id == collection_id).delete()
+        db.commit()
+        return {"message": "Collection deleted successfully"}
+    except Exception as e:
+        logging.error(f"Error deleting collection: {e}")
+        raise HTTPException(status_code=500, detail=f"Error deleting collection: {e}")
+    
+# 컬렉션 이름 변경
+@app.put("/api/collections/{collection_id}", status_code=status.HTTP_200_OK)
+def update_collection_name(collection_id: int, new_name: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    collection = db.query(Collection).filter(Collection.collection_id == collection_id).first()
+    if not collection or collection.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Collection not found or not authorized")
+    crud.update_record(db=db, model=Collection, record_id=collection_id, collection_name=new_name)
+    return {"message": "Collection name updated successfully"}
+
+# 컬렉션 안에 있는 이미지 삭제
+@app.delete("/api/collections/{collection_id}/results/{result_id}", status_code=status.HTTP_200_OK)
+def delete_image_from_collection(collection_id: int, result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    logging.debug(f"Deleting result_id: {result_id} from collection_id: {collection_id} by user_id: {current_user.id}")
+    collection = db.query(Collection).filter(Collection.collection_id == collection_id, Collection.user_id == current_user.id).first()
+    if not collection:
+        logging.error(f"Collection not found or not authorized for user_id: {current_user.id}")
+        raise HTTPException(status_code=404, detail="Collection not found or not authorized")
+    collection_result = db.query(CollectionResult).filter(CollectionResult.collection_id == collection_id, CollectionResult.result_id == result_id).first()
+    if not collection_result:
+        logging.error(f"CollectionResult not found for collection_id: {collection_id} and result_id: {result_id}")
+        raise HTTPException(status_code=404, detail="CollectionResult not found")
+    
+    try:
+        # collection_result 삭제
+        crud.delete_record(db=db, model=CollectionResult, record_id=collection_result.id)
+        logging.debug(f"Deleted CollectionResult with ID: {collection_result.id}")
+        return {"message": "Image successfully removed from collection"}
+    except Exception as e:
+        logging.error(f"Error deleting image from collection: {e}")
+        raise HTTPException(status_code=500, detail=f"Error deleting image from collection: {e}")
+
+### AI ###
+# 이미지 생성 진척도 반환
+# Redis 클라이언트
+redis_client = redis.Redis(host='118.67.128.129', port=6379, db=0)
+
+@app.get("/progress/{task_id}")
+def get_task_progress(task_id: str):
+    try:
+        redis_key = f"task_progress:{task_id}"
+        progress_data = redis_client.get(redis_key)
+        
+        if not progress_data:
+            raise HTTPException(status_code=404, detail="Progress data not found")
+        
+        progress_info = json.loads(progress_data)
+        return {
+            "task_id": task_id,
+            "progress": progress_info.get("progress"),
+            "estimated_remaining_time": progress_info.get("estimated_remaining_time")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving progress: {e}")
+
+
 
 if __name__ == "__main__":
     import uvicorn
