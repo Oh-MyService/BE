@@ -6,6 +6,7 @@ from pydantic import create_model
 from dotenv import load_dotenv
 import redis
 import json
+from crud import get_record
 import os
 from datetime import datetime, timedelta
 import logging
@@ -24,7 +25,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from passlib.context import CryptContext
 from dotenv import load_dotenv
-from . import models, crud  # models.py, crud.py에서 정의된 함수와 클래스
+from . import models, crud 
 from .database import SessionLocal
 from datetime import datetime, timezone
 
@@ -346,6 +347,27 @@ def delete_result(result_id: int, db: Session = Depends(get_db), current_user: U
     crud.delete_record(db=db, model=Result, record_id=result_id)
     return {"message": "Result deleted successfully"}
 
+
+# result_id 로 옵션값 가져오기
+@app.get("/api/results/{result_id}/prompt")
+def get_prompt_by_result_id(result_id: int, db: Session = Depends(get_db)):
+    # result_id로 Result 테이블에서 prompt_id 가져오기
+    result = get_record(db=db, model=Result, record_id=result_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Result를 찾을 수 없습니다.")
+    
+    prompt_id = result.prompt_id
+
+    # prompt_id로 Prompt 테이블에서 해당 데이터 가져오기
+    prompt = get_record(db=db, model=Prompt, record_id=prompt_id)
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt를 찾을 수 없습니다.")
+    
+    # prompt의 content와 ai_option 반환
+    return {
+        "content": prompt.content,
+        "ai_option": prompt.ai_option
+    }
 
 ### collections ###
 # 컬랙션 만들기
