@@ -6,7 +6,7 @@ from pydantic import create_model
 from dotenv import load_dotenv
 import redis
 import json
-from crud import get_record
+from .crud import get_record
 import os
 from datetime import datetime, timedelta
 import logging
@@ -25,7 +25,6 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from passlib.context import CryptContext
 from dotenv import load_dotenv
-from . import models, crud 
 from .database import SessionLocal
 from datetime import datetime, timezone
 
