@@ -27,6 +27,7 @@ from passlib.context import CryptContext
 from dotenv import load_dotenv
 from .database import SessionLocal
 from datetime import datetime, timezone
+import pika
 
 # Load environment variables
 load_dotenv()
@@ -564,8 +565,8 @@ def delete_image_from_collection(collection_id: int, result_id: int, db: Session
         logging.error(f"Error deleting image from collection: {e}")
         raise HTTPException(status_code=500, detail=f"Error deleting image from collection: {e}")
 
-### AI ###
-# 이미지 생성 진척도 반환
+### AI 진척도 ###
+## 이미지 생성 진척도 반환
 # Redis 클라이언트
 redis_client = redis.Redis(host='118.67.128.129', port=6379, db=0)
 @app.get("/progress/{task_id}")
@@ -586,7 +587,30 @@ def get_task_progress(task_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving progress: {e}")
 
-# password
+
+## RabbitMQ 큐 
+# RabbitMQ 연결 
+def get_rabbitmq_queue_count():
+    connection = pika.BlockingConnection(pika.ConnectionParameters('http://118.67.128.129:15672'))  
+    channel = connection.channel()
+
+    # RabbitMQ 모든 큐 상태 가져오기
+    queue_info = channel.queue_declare(queue='', passive=True) 
+    queue_count = queue_info.method.message_count
+    connection.close()
+    return queue_count
+
+    # 전체 큐 개수 
+    @app.get("/rabbitmq/queue_count")
+    def get_queue_count():
+        try:
+            queue_count = get_rabbitmq_queue_count()
+            return {"queue_count": queue_count}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error retrieving RabbitMQ queue count: {e}")
+
+
+##### password  ####
 # Gmail SMTP 설정
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
