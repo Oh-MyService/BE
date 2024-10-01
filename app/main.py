@@ -9,6 +9,7 @@ import json
 from .crud import get_record
 import os
 from datetime import datetime, timedelta
+from requests.auth import HTTPBasicAuth
 import logging
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -588,32 +589,35 @@ def get_task_progress(task_id: str):
         raise HTTPException(status_code=500, detail=f"Error retrieving progress: {e}")
     
 
-# RabbitMQ 연결 설정 및 특정 큐의 대기 중인 메시지 수 반환
+# RabbitMQ 관리 API를 통해 큐 상태 가져오기
 def get_rabbitmq_queue_status(queue_name: str):
-    connection = pika.BlockingConnection(pika.ConnectionParameters(host='118.67.128.129'))  # RabbitMQ 서버 주소
-    channel = connection.channel()
-
-    # RabbitMQ의 특정 큐 상태 가져오기
-    queue_info = channel.queue_declare(queue=queue_name, passive=True)  # 큐 이름 
-    ready_count = queue_info.method.message_count  # Ready 상태의 메시지 수
-    unacked_count = queue_info.method.consumer_count  # Unacked 상태의 메시지 수
-    connection.close()
-
-    return ready_count, unacked_count
+    url = f"http://118.67.128.129:15672/api/queues/%2F/{queue_name}"  # %2F는 기본 vhost를 의미
+    try:
+        response = requests.get(url, auth=HTTPBasicAuth('guest', 'guest'))  # RabbitMQ 관리 API에 접근
+        if response.status_code == 200:
+            data = response.json()
+            ready_count = data.get("messages_ready", 0)  # Ready 상태의 메시지 수
+            unacked_count = data.get("messages_unacknowledged", 0)  # Unacked 상태의 메시지 수
+            total_count = data.get("messages", 0)  # 전체 메시지 수
+            return ready_count, unacked_count, total_count
+        else:
+            raise Exception(f"Failed to retrieve queue status: {response.status_code} {response.text}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving RabbitMQ queue status: {e}")
 
 # 큐 상태 반환 API
 @app.get("/rabbitmq/queue_status")
 def get_queue_status(queue_name: str = 'celery'):  # 기본 큐 이름을 'celery'로 설정
     try:
-        ready_count, unacked_count = get_rabbitmq_queue_status(queue_name)
+        ready_count, unacked_count, total_count = get_rabbitmq_queue_status(queue_name)
         return {
             "queue_name": queue_name,
             "ready_count": ready_count,
             "unacked_count": unacked_count,
-            "total_count": ready_count + unacked_count  # 전체 메시지 수
+            "total_count": total_count
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error retrieving RabbitMQ queue status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
     
 ##### password  ####
