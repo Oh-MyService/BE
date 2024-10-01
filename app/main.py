@@ -612,7 +612,7 @@ def send_reset_email(to_email: str, reset_token: str):
         print(f"이메일 전송 실패: {e}")
 
 # 비밀번호 재설정 요청 (사용자가 이메일을 입력하여 토큰 요청)
-@app.post("http://118.67.128.129:28282/api/find-account")
+@app.post("/api/find-account")
 def password_reset_request(email: str = Form(...), db: Session = Depends(get_db)):
     # 사용자 이메일로 사용자 조회
     user = crud.get_user_by_email(db, email=email)
