@@ -588,28 +588,26 @@ def get_task_progress(task_id: str):
         raise HTTPException(status_code=500, detail=f"Error retrieving progress: {e}")
 
 
-## RabbitMQ 큐 
-# RabbitMQ 연결 
-def get_rabbitmq_queue_count():
-    connection = pika.BlockingConnection(pika.ConnectionParameters('http://118.67.128.129:15672'))  
+# RabbitMQ 연결 설정 및 특정 큐의 대기 중인 메시지 수 반환
+def get_rabbitmq_queue_count(queue_name: str):
+    connection = pika.BlockingConnection(pika.ConnectionParameters(host='118.67.128.129'))  # RabbitMQ 서버 주소
     channel = connection.channel()
 
-    # RabbitMQ 모든 큐 상태 가져오기
-    queue_info = channel.queue_declare(queue='', passive=True) 
+    # RabbitMQ의 특정 큐 상태 가져오기
+    queue_info = channel.queue_declare(queue=queue_name, passive=True) 
     queue_count = queue_info.method.message_count
     connection.close()
     return queue_count
 
-# 전체 큐 개수
+# 전체 큐 개수 가져오기 API 엔드포인트
 @app.get("/rabbitmq/queue_count")
-def get_queue_count():
+def get_queue_count(queue_name: str = 'celery'): 
     try:
-        queue_count = get_rabbitmq_queue_count()
-        return {"queue_count": queue_count}
+        queue_count = get_rabbitmq_queue_count(queue_name)
+        return {"queue_name": queue_name, "queue_count": queue_count}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving RabbitMQ queue count: {e}")
-
-
+    
 ##### password  ####
 # Gmail SMTP 설정
 SMTP_SERVER = "smtp.gmail.com"
