@@ -600,14 +600,14 @@ def get_rabbitmq_queue_count():
     connection.close()
     return queue_count
 
-    # 전체 큐 개수 
-    @app.get("/rabbitmq/queue_count")
-    def get_queue_count():
-        try:
-            queue_count = get_rabbitmq_queue_count()
-            return {"queue_count": queue_count}
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error retrieving RabbitMQ queue count: {e}")
+# 전체 큐 개수
+@app.get("/rabbitmq/queue_count")
+def get_queue_count():
+    try:
+        queue_count = get_rabbitmq_queue_count()
+        return {"queue_count": queue_count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving RabbitMQ queue count: {e}")
 
 
 ##### password  ####
