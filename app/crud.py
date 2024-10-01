@@ -1,6 +1,5 @@
 # crud.py
 from sqlalchemy.orm import Session
-from . import models
 
 # 레코드 생성 함수
 def create_record(db: Session, model, **kwargs):
