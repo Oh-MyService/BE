@@ -689,7 +689,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # Pydantic 모델 정의
 class PasswordResetRequest(BaseModel):
     token: str
-    new_password: str
+    newPassword: str
 
 # 비밀번호 재설정 (토큰을 사용하여 새 비밀번호 설정)
 @app.post("/api/change-password")
@@ -704,7 +704,7 @@ async def reset_password(request: PasswordResetRequest, db: Session = Depends(ge
         raise HTTPException(status_code=400, detail="토큰이 만료되었습니다.")
     
     # 새 비밀번호 해시화
-    hashed_password = pwd_context.hash(request.new_password)
+    hashed_password = pwd_context.hash(request.newPassword)
     
     # 비밀번호 업데이트 및 토큰 무효화
     crud.update_user_password(db, user.id, hashed_password)
