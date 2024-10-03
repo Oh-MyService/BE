@@ -682,7 +682,7 @@ def password_reset_request(request: EmailRequest, db: Session = Depends(get_db))
     
     return {"message": "비밀번호 재설정 이메일이 전송되었습니다."}
 
-    
+
 # 비밀번호 재설정 (토큰을 사용하여 새 비밀번호 설정)
 class EmailRequest(BaseModel):
     email: str
@@ -706,3 +706,5 @@ def password_reset_request(request: EmailRequest, db: Session = Depends(get_db))
     return {"message": "비밀번호 재설정 이메일이 전송되었습니다."}
 
 if __name__ == "__main__":
+       import uvicorn
+       uvicorn.run(app, host="0.0.0.0", port=8000)
