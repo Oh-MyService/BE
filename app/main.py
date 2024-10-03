@@ -640,7 +640,7 @@ def get_db():
 def send_reset_email(to_email: str, reset_token: str):
     sender_email = SMTP_USER
     subject = "비밀번호 재설정 링크"
-    reset_link = f"http://118.67.128.129:25252/reset-password?token={reset_token}"
+    reset_link = f"http://118.67.128.129:25252/change-pw?token={reset_token}"
     # 이메일 내용 구성
     message = MIMEMultipart()
     message['From'] = sender_email
