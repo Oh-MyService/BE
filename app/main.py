@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, Request, Form, UploadFile, 
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, Dict
-from pydantic import create_model
+from pydantic import create_model, BaseModel
 from dotenv import load_dotenv
 import redis
 import json
@@ -658,20 +658,31 @@ def send_reset_email(to_email: str, reset_token: str):
     except Exception as e:
         print(f"이메일 전송 실패: {e}")
 # 비밀번호 재설정 요청 (사용자가 이메일을 입력하여 토큰 요청)
+
+# 이메일 요청을 위한 Pydantic 모델 정의
+class EmailRequest(BaseModel):
+    email: str
+
 @app.post("/api/find-account")
-def password_reset_request(email: str = Form(...), db: Session = Depends(get_db)):
+def password_reset_request(request: EmailRequest, db: Session = Depends(get_db)):
     # 사용자 이메일로 사용자 조회
-    user = crud.get_user_by_email(db, email=email)
+    user = crud.get_user_by_email(db, email=request.email)
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
-    # 고유한 비밀번호 재설정 토큰 생성 및 만료 시간 설정 (1시간 유효)
+    
+    # 비밀번호 재설정 토큰 생성 및 만료 시간 설정 (1시간 유효)
     reset_token = str(uuid.uuid4())
     reset_token_expires = datetime.now(timezone.utc) + timedelta(hours=1)
+    
     # 토큰을 사용자 정보에 저장
     crud.save_password_reset_token(db, user.id, reset_token, reset_token_expires)
+    
     # 이메일로 재설정 링크 전송
     send_reset_email(user.email, reset_token)
+    
     return {"message": "비밀번호 재설정 이메일이 전송되었습니다."}
+
+    
 # 비밀번호 재설정 (토큰을 사용하여 새 비밀번호 설정)
 class EmailRequest(BaseModel):
     email: str
@@ -695,4 +706,3 @@ def password_reset_request(request: EmailRequest, db: Session = Depends(get_db))
     return {"message": "비밀번호 재설정 이메일이 전송되었습니다."}
 
 if __name__ == "__main__":
-    import uvicorn
