@@ -684,26 +684,20 @@ def password_reset_request(request: EmailRequest, db: Session = Depends(get_db))
 
 
 # 비밀번호 재설정 (토큰을 사용하여 새 비밀번호 설정)
-class EmailRequest(BaseModel):
-    email: str
 @app.post("/reset-password/")
-def password_reset_request(request: EmailRequest, db: Session = Depends(get_db)):
-    # 사용자 이메일로 사용자 조회
-    user = crud.get_user_by_email(db, email=request.email)
+async def reset_password(token: str = Form(...), new_password: str = Form(...), db: Session = Depends(get_db)):
+    # 토큰을 이용하여 사용자 찾기
+    user = crud.get_user_by_reset_token(db, reset_token=token)
     if not user:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
-    
-    # 고유한 비밀번호 재설정 토큰 생성 및 만료 시간 설정 (1시간 유효)
-    reset_token = str(uuid.uuid4())
-    reset_token_expires = datetime.now(timezone.utc) + timedelta(hours=1)
-    
-    # 토큰을 사용자 정보에 저장
-    crud.save_password_reset_token(db, user.id, reset_token, reset_token_expires)
-    
-    # 이메일로 재설정 링크 전송
-    send_reset_email(user.email, reset_token)
-    
-    return {"message": "비밀번호 재설정 이메일이 전송되었습니다."}
+        raise HTTPException(status_code=400, detail="유효하지 않은 토큰입니다.")
+    # 토큰이 만료되었는지 확인
+    if user.reset_token_expires < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="토큰이 만료되었습니다.")
+    # 새 비밀번호 해시화
+    hashed_password = pwd_context.hash(new_password)
+    # 비밀번호 업데이트 및 토큰 무효화
+    crud.update_user_password(db, user.id, hashed_password)
+    return {"message": "비밀번호가 성공적으로 변경되었습니다."}
 
 if __name__ == "__main__":
        import uvicorn
