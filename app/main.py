@@ -640,7 +640,7 @@ def get_db():
 def send_reset_email(to_email: str, reset_token: str):
     sender_email = SMTP_USER
     subject = "비밀번호 재설정 링크"
-    reset_link = f"http://localhost:8000/reset-password?token={reset_token}"
+    reset_link = f"http://118.67.128.129:25252/reset-password?token={reset_token}"
     # 이메일 내용 구성
     message = MIMEMultipart()
     message['From'] = sender_email
@@ -684,7 +684,7 @@ def password_reset_request(request: EmailRequest, db: Session = Depends(get_db))
 
 
 # 비밀번호 재설정 (토큰을 사용하여 새 비밀번호 설정)
-@app.post("/reset-password/")
+@app.post("api/change-password")
 async def reset_password(token: str = Form(...), new_password: str = Form(...), db: Session = Depends(get_db)):
     # 토큰을 이용하여 사용자 찾기
     user = crud.get_user_by_reset_token(db, reset_token=token)
