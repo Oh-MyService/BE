@@ -683,20 +683,27 @@ def password_reset_request(request: EmailRequest, db: Session = Depends(get_db))
     return {"message": "비밀번호 재설정 이메일이 전송되었습니다."}
 
 
+# 패스워드 해시화를 위한 설정
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 # 비밀번호 재설정 (토큰을 사용하여 새 비밀번호 설정)
-@app.post("api/change-password")
+@app.post("/api/change-password")
 async def reset_password(token: str = Form(...), new_password: str = Form(...), db: Session = Depends(get_db)):
     # 토큰을 이용하여 사용자 찾기
     user = crud.get_user_by_reset_token(db, reset_token=token)
     if not user:
         raise HTTPException(status_code=400, detail="유효하지 않은 토큰입니다.")
+    
     # 토큰이 만료되었는지 확인
-    if user.reset_token_expires < datetime.utcnow():
+    if user.reset_token_expires < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="토큰이 만료되었습니다.")
+    
     # 새 비밀번호 해시화
     hashed_password = pwd_context.hash(new_password)
+    
     # 비밀번호 업데이트 및 토큰 무효화
     crud.update_user_password(db, user.id, hashed_password)
+    
     return {"message": "비밀번호가 성공적으로 변경되었습니다."}
 
 if __name__ == "__main__":
