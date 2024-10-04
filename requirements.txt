@@ -18,3 +18,4 @@ passlib
 requests
 redis
 pika
+minio

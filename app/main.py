@@ -30,6 +30,7 @@ from .database import SessionLocal
 from datetime import datetime, timezone
 import pika
 from pydantic import BaseModel
+from minio import Minio
 
 # Load environment variables
 load_dotenv()
@@ -76,11 +77,29 @@ SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 180  # 나중에 수정 필요
 
+
+### MinIO 클라이언트 설정
+minio_client = Minio(
+    "118.67.128.129:9000",
+    access_key="minio",
+    secret_key="minio1234",
+    secure=False
+)
+bucket_name = "test"
+
+
+# MinIO에서 이미지 삭제
+def delete_image_from_minio(object_name: str):
+    try:
+        minio_client.remove_object(bucket_name, object_name)
+        print(f"MinIO에서 이미지 {object_name}가 성공적으로 삭제되었습니다.")
+    except Exception as e:
+        print(f"MinIO에서 이미지 삭제 중 오류 발생: {e}")
+        raise HTTPException(status_code=500, detail=f"MinIO에서 이미지 삭제 중 오류 발생: {e}")
+
 ### users ###
 def get_user_by_username(db: Session, username: str):
     return db.query(User).filter(User.username == username).first()
-
-UserCreate = create_model('UserCreate', username=(str, ...), password=(str, ...), email=(str, ...))
 
 UserCreate = create_model('UserCreate', username=(str, ...), password=(str, ...), email=(str, ...))
 
@@ -344,11 +363,23 @@ def get_user_results(user_id: int, db: Session = Depends(get_db), current_user: 
 # 최근 생성 삭제
 @app.delete("/api/results/{result_id}", status_code=status.HTTP_200_OK)
 def delete_result(result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # 삭제할 result 조회
     result = crud.get_record(db=db, model=Result, record_id=result_id)
-    if not result or result.user_id != current_user.id:raise HTTPException(status_code=404, detail="Result not found or not authorized")
-    crud.delete_record(db=db, model=Result, record_id=result_id)
-    return {"message": "Result deleted successfully"}
+    if not result or result.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Result를 찾을 수 없거나 권한이 없습니다.")
 
+    try:
+        # MinIO에서 이미지 삭제
+        if result.image_data:
+            delete_image_from_minio(result.image_data)
+
+        # 데이터베이스에서 result 삭제
+        crud.delete_record(db=db, model=Result, record_id=result_id)
+
+        return {"message": "Result 및 MinIO 이미지가 성공적으로 삭제되었습니다."}
+    except Exception as e:
+        logging.error(f"Result 삭제 중 오류 발생: {e}")
+        raise HTTPException(status_code=500, detail=f"Result 삭제 중 오류 발생: {e}")
 
 # result_id 로 옵션값 가져오기
 @app.get("/api/results/{result_id}/prompt")
