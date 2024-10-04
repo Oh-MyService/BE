@@ -387,6 +387,7 @@ def delete_result(result_id: int, db: Session = Depends(get_db), current_user: U
         raise HTTPException(status_code=500, detail=f"Result 삭제 중 오류 발생: {e}")
 
 
+
 # result_id 로 옵션값 가져오기
 @app.get("/api/results/{result_id}/prompt")
 def get_prompt_by_result_id(result_id: int, db: Session = Depends(get_db)):
