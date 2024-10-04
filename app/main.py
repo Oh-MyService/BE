@@ -90,11 +90,12 @@ bucket_name = "test"
 
 
 # MinIO에서 이미지 삭제
-def delete_image_from_minio(object_name: str):
+def delete_image_from_minio(image_url: str, user_id: int, prompt_id: int):
     try:
-        parsed_url = urlparse(object_name)
-        object_name = parsed_url.path.lstrip('/') 
-        
+        parsed_url = urlparse(image_url)
+        image_name = parsed_url.path.split('/')[-1] 
+
+        object_name = f"{user_id}/{prompt_id}/{image_name}"
         minio_client.remove_object(bucket_name, object_name)
         print(f"MinIO에서 이미지 {object_name}가 성공적으로 삭제되었습니다.")
     except Exception as e:
