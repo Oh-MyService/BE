@@ -376,7 +376,7 @@ def delete_result(result_id: int, db: Session = Depends(get_db), current_user: U
     try:
         # MinIO에서 이미지 삭제
         if result.image_data:
-            delete_image_from_minio(result.image_data)
+            delete_image_from_minio(result.image_data, result.user_id, result.prompt_id)  
 
         # 데이터베이스에서 result 삭제
         crud.delete_record(db=db, model=Result, record_id=result_id)
@@ -385,6 +385,7 @@ def delete_result(result_id: int, db: Session = Depends(get_db), current_user: U
     except Exception as e:
         logging.error(f"Result 삭제 중 오류 발생: {e}")
         raise HTTPException(status_code=500, detail=f"Result 삭제 중 오류 발생: {e}")
+
 
 # result_id 로 옵션값 가져오기
 @app.get("/api/results/{result_id}/prompt")
