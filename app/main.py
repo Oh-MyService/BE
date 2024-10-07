@@ -6,7 +6,7 @@ from pydantic import create_model, BaseModel
 from dotenv import load_dotenv
 import redis
 import json
-from .crud import get_record
+from .crud import get_record, get_user_by_reset_token, update_user_password
 import os
 from datetime import datetime, timedelta
 from requests.auth import HTTPBasicAuth
