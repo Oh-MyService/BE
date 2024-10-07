@@ -59,3 +59,4 @@ def update_user_password(db: Session, user_id: int, hashed_password: str):
         user.reset_token_expires = None  # 토큰 만료시간 제거
         db.commit()
         db.refresh(user)
+    return user
