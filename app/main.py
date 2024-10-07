@@ -758,6 +758,8 @@ class PasswordResetRequest(BaseModel):
 # 비밀번호 재설정 (토큰을 사용하여 새 비밀번호 설정)
 @app.post("/api/change-password")
 async def reset_password(request: PasswordResetRequest, db: Session = Depends(get_db)):
+    logging.info(f"token: {request.token}")
+    
     # 토큰을 이용하여 사용자 찾기
     user = crud.get_user_by_reset_token(db, reset_token=request.token)
     if not user:
