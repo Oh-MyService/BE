@@ -6,7 +6,7 @@ from pydantic import create_model, BaseModel
 from dotenv import load_dotenv
 import redis
 import json
-from .crud import get_record, get_user_by_reset_token, update_user_password
+from .crud import get_record
 import os
 from datetime import datetime, timedelta
 from requests.auth import HTTPBasicAuth
@@ -747,20 +747,21 @@ def password_reset_request(email: str = Form(...), db: Session = Depends(get_db)
     return {"message": "비밀번호 재설정 이메일이 전송되었습니다."}
 
 
-# 비밀번호 해시화를 위한 설정
+# 패스워드 해시화를 위한 설정
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# 비밀번호 재설정 요청 모델
+# Pydantic 모델 정의
 class PasswordResetRequest(BaseModel):
     token: str
     new_password: str
 
-# 비밀번호 재설정 (reset_token을 사용하여 새 비밀번호 설정)
+# 비밀번호 재설정 (토큰을 사용하여 새 비밀번호 설정)
 @app.post("/api/change-password")
 async def reset_password(request: PasswordResetRequest, db: Session = Depends(get_db)):
-    # reset_token을 이용하여 사용자 찾기
-    user = get_user_by_reset_token(db, reset_token=request.token)
+    logging.info(f"token: {request.token}")
     
+    # 토큰을 이용하여 사용자 찾기
+    user = crud.get_user_by_reset_token(db, reset_token=request.token)
     if not user:
         raise HTTPException(status_code=400, detail="유효하지 않은 토큰입니다.")
     
@@ -772,7 +773,7 @@ async def reset_password(request: PasswordResetRequest, db: Session = Depends(ge
     hashed_password = pwd_context.hash(request.new_password)
     
     # 비밀번호 업데이트 및 토큰 무효화
-    update_user_password(db, user.id, hashed_password)
+    crud.update_user_password(db, user.id, hashed_password)
     
     return {"message": "비밀번호가 성공적으로 변경되었습니다."}
 
