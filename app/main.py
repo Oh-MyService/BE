@@ -757,11 +757,10 @@ class PasswordResetRequest(BaseModel):
 
 # 비밀번호 재설정 (토큰을 사용하여 새 비밀번호 설정)
 @app.post("/api/change-password")
-async def reset_password(request: PasswordResetRequest, db: Session = Depends(get_db)):
-    logging.info(f"token: {request.token}")
-    
+async def reset_password(token: str = Form(...), new_password: str = Form(...),db: Session = Depends(get_db)):
+   # logging.info(f"token: {request.token}")
     # 토큰을 이용하여 사용자 찾기
-    user = crud.get_user_by_reset_token(db, reset_token=request.token)
+    user = crud.get_user_by_reset_token(db, reset_token=token)
     if not user:
         raise HTTPException(status_code=400, detail="유효하지 않은 토큰입니다.")
     
@@ -770,7 +769,7 @@ async def reset_password(request: PasswordResetRequest, db: Session = Depends(ge
         raise HTTPException(status_code=400, detail="토큰이 만료되었습니다.")
     
     # 새 비밀번호 해시화
-    hashed_password = pwd_context.hash(request.new_password)
+    hashed_password = pwd_context.hash(new_password)
     
     # 비밀번호 업데이트 및 토큰 무효화
     crud.update_user_password(db, user.id, hashed_password)
