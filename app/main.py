@@ -106,6 +106,9 @@ def delete_image_from_minio(image_url: str, user_id: int, prompt_id: int):
 def get_user_by_username(db: Session, username: str):
     return db.query(User).filter(User.username == username).first()
 
+def get_user_by_email(db: Session, email: str):
+    return db.query(User).filter(User.email == email).first()
+
 UserCreate = create_model('UserCreate', username=(str, ...), password=(str, ...), email=(str, ...))
 
 @app.post("/register")
@@ -725,9 +728,9 @@ class EmailRequest(BaseModel):
     email: str
 
 @app.post("/api/find-account")
-def password_reset_request(request: EmailRequest, db: Session = Depends(get_db)):
+def password_reset_request(email: str = Form(...), db: Session = Depends(get_db)):
     # 사용자 이메일로 사용자 조회
-    user = crud.get_user_by_email(db, email=request.email)
+    user = get_user_by_email(db, email=email)
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
     
