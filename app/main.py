@@ -607,7 +607,7 @@ def delete_image_from_collection(collection_id: int, result_id: int, db: Session
 
 ### AI 진척도 ###
 ## 이미지 생성 진척도 반환
-# Redis 클라이언트
+# Redis 클라이언트 설정
 redis_client = redis.Redis(host='118.67.128.129', port=6379, db=0)
 @app.get("/progress/{task_id}")
 def get_task_progress(task_id: str):
@@ -635,9 +635,9 @@ def get_rabbitmq_queue_status(queue_name: str):
         response = requests.get(url, auth=HTTPBasicAuth('guest', 'guest'))  # RabbitMQ 관리 API에 접근
         if response.status_code == 200:
             data = response.json()
-            ready_count = data.get("messages_ready", 0)  # Ready 상태의 메시지 수
-            unacked_count = data.get("messages_unacknowledged", 0)  # Unacked 상태의 메시지 수
-            total_count = data.get("messages", 0)  # 전체 메시지 수
+            ready_count = data.get("messages_ready", 0)  
+            unacked_count = data.get("messages_unacknowledged", 0)  
+            total_count = data.get("messages", 0)  
             return ready_count, unacked_count, total_count
         else:
             raise Exception(f"Failed to retrieve queue status: {response.status_code} {response.text}")
@@ -657,6 +657,29 @@ def get_queue_status(queue_name: str = 'celery'):  # 기본 큐 이름을 'celer
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# 내 task_id 기준 남은 상황 반환
+@app.get("/tasks/{task_id}/position")
+def get_task_position(task_id: str):
+    try:
+        # Redis에서 대기 중인 작업 목록
+        task_queue = redis_client.lrange('celery_task_queue', 0, -1)
+        task_queue = [task.decode('utf-8') for task in task_queue]
+
+        if task_id not in task_queue:
+            raise HTTPException(status_code=404, detail="Task not found in the queue")
+
+        # 내 task_id의 위치
+        task_position = task_queue.index(task_id) + 1
+
+        return {
+            "task_id": task_id,
+            "position_in_queue": task_position,
+            "total_tasks_in_queue": len(task_queue)
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving task position: {e}")     
 
 
 ##### password  ####
