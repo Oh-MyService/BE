@@ -747,14 +747,6 @@ def password_reset_request(email: str = Form(...), db: Session = Depends(get_db)
     return {"message": "비밀번호 재설정 이메일이 전송되었습니다."}
 
 
-# 패스워드 해시화를 위한 설정
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# Pydantic 모델 정의
-class PasswordResetRequest(BaseModel):
-    token: str
-    new_password: str
-
 # 비밀번호 해시화를 위한 설정
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
