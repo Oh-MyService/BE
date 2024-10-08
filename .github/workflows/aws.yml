@@ -68,4 +68,6 @@ jobs:
           
           # Run new container
           sudo docker run -d --name fastapi_app --env-file /home/$SSH_USERNAME/.env -p 28282:8000 \\$BACKEND_IMAGE
+
+          sudo docker system prune -af
         EOF
