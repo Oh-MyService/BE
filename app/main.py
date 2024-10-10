@@ -228,7 +228,8 @@ SECOND_API_URL = "http://118.67.128.129:27272/generate-image"
 
 @app.post("/api/prompts")
 def create_prompt(
-    content: str = Form(...),  
+    positive_prompt: str = Form(...),  
+    negative_prompt: Optional[str] = Form(None),  
     width: Optional[int] = Form(...),  
     height: Optional[int] = Form(...),  
     background_color: Optional[str] = Form(...),  
@@ -240,7 +241,7 @@ def create_prompt(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    logging.debug(f"Received request to create prompt with content: {content} for user ID: {current_user.id}")
+    logging.debug(f"Received request to create prompt with positive prompt: {positive_prompt} for user ID: {current_user.id}")
     try:
         ai_option = {
             "width": int(width) if width is not None else None,
@@ -248,7 +249,7 @@ def create_prompt(
             "background_color": str(background_color) if background_color is not None else None,
             "pattern": int(pattern) if pattern is not None else None,
             "mood": str(mood) if mood is not None else None,
-            "cfg_scale": float(cfg_scale) if cfg_scale is not None else None,  # 수정된 부분
+            "cfg_scale": float(cfg_scale) if cfg_scale is not None else None, 
             "sampling_steps": int(sampling_steps) if sampling_steps is not None else None,
             "seed": int(seed) if seed is not None else None
         }
@@ -257,7 +258,8 @@ def create_prompt(
         ai_option = {k: v for k, v in ai_option.items() if v is not None}
 
         prompt_data = {
-            "content": content,
+             "positive_prompt": positive_prompt,
+            "negative_prompt": negative_prompt,
             "ai_option": ai_option,
             "user_id": current_user.id,
             "created_at": datetime.now()
@@ -269,7 +271,8 @@ def create_prompt(
         ai_input_data = {
             "user_id": current_user.id,
             "prompt_id": new_prompt.id,
-            "content": content,
+             "positive_prompt": positive_prompt,
+            "negative_prompt": negative_prompt,
             "ai_option": ai_option
         }
         logging.debug(f"ai_option: {ai_input_data['ai_option']}")
