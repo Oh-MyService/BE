@@ -20,7 +20,6 @@ from .models import User, Prompt, Result, Collection, CollectionResult
 from .utils import sqlalchemy_to_pydantic, create_access_token, decode_access_token, is_token_expired
 import requests
 import os
-from fastapi import Body
 import uuid
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -239,12 +238,16 @@ def create_prompt(
     cfg_scale: Optional[float] = Form(...),  
     sampling_steps: Optional[int] = Form(...),  
     seed: Optional[int] = Form(...),  
-    content: Dict[str, str] = Body(...), 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     logging.debug(f"Received request to create prompt with positive prompt: {positive_prompt} for user ID: {current_user.id}")
     try:
+        content ={
+            "positive_prompt": str(positive_prompt),
+            "negative_prompt": str(negative_prompt)
+        }
+
         ai_option = {
             "width": int(width) if width is not None else None,
             "height": int(height) if height is not None else None,
