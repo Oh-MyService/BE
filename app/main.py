@@ -229,7 +229,7 @@ SECOND_API_URL = "http://118.67.128.129:27272/generate-image"
 @app.post("/api/prompts")
 def create_prompt(
     positive_prompt: str = Form(...),  
-    negative_prompt: Optional[str] = Form(None),  
+    negative_prompt: Optional[str] = Form(...),  
     width: Optional[int] = Form(...),  
     height: Optional[int] = Form(...),  
     background_color: Optional[str] = Form(...),  
