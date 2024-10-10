@@ -257,13 +257,19 @@ def create_prompt(
         # None 값 제거
         ai_option = {k: v for k, v in ai_option.items() if v is not None}
 
+        # positive_prompt와 negative_prompt를 content에 JSON 형태로 저장
+        content = json.dumps({
+            "positive_prompt": positive_prompt,
+            "negative_prompt": negative_prompt
+        })
+
         prompt_data = {
-             "positive_prompt": positive_prompt,
-            "negative_prompt": negative_prompt,
+            "content": content,
             "ai_option": ai_option,
             "user_id": current_user.id,
             "created_at": datetime.now()
         }
+
         new_prompt = crud.create_record(db=db, model=Prompt, **prompt_data)
         logging.debug(f"Created new prompt: {new_prompt}")
 
@@ -271,8 +277,7 @@ def create_prompt(
         ai_input_data = {
             "user_id": current_user.id,
             "prompt_id": new_prompt.id,
-             "positive_prompt": positive_prompt,
-            "negative_prompt": negative_prompt,
+            "content": content,
             "ai_option": ai_option
         }
         logging.debug(f"ai_option: {ai_input_data['ai_option']}")
