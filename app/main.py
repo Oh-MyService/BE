@@ -257,11 +257,10 @@ def create_prompt(
         # None 값 제거
         ai_option = {k: v for k, v in ai_option.items() if v is not None}
 
-        # positive_prompt와 negative_prompt를 content에 JSON 형태로 저장
-        content = json.dumps({
+        content = {
             "positive_prompt": positive_prompt,
             "negative_prompt": negative_prompt
-        })
+        }
 
         prompt_data = {
             "content": content,
