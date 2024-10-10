@@ -244,8 +244,8 @@ def create_prompt(
     logging.debug(f"Received request to create prompt with positive prompt: {positive_prompt} for user ID: {current_user.id}")
     try:
         content ={
-            "positive_prompt": str(positive_prompt),
-            "negative_prompt": str(negative_prompt)
+            "positive_prompt": str(positive_prompt) if positive_prompt is not None else None,
+            "negative_prompt": str(negative_prompt) if negative_prompt is not None else None
         }
 
         ai_option = {
@@ -260,6 +260,7 @@ def create_prompt(
         }
 
         # None 값 제거
+        content = {k: v for k, v in content.items() if v is not None}
         ai_option = {k: v for k, v in ai_option.items() if v is not None}
 
         prompt_data = {
@@ -669,27 +670,6 @@ def get_queue_status(queue_name: str = 'celery'):  # 기본 큐 이름을 'celer
         raise HTTPException(status_code=500, detail=str(e))
 
 # 내 task_id 기준 남은 상황 반환
-@app.get("/tasks/{task_id}/position")
-def get_task_position(task_id: str):
-    try:
-        # Redis에서 대기 중인 작업 목록
-        task_queue = redis_client.lrange('celery_task_queue', 0, -1)
-        task_queue = [task.decode('utf-8') for task in task_queue]
-
-        if task_id not in task_queue:
-            raise HTTPException(status_code=404, detail="Task not found in the queue")
-
-        # 내 task_id의 위치
-        task_position = task_queue.index(task_id) + 1
-
-        return {
-            "task_id": task_id,
-            "position_in_queue": task_position,
-            "total_tasks_in_queue": len(task_queue)
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error retrieving task position: {e}")     
 
 
 ##### password  ####
