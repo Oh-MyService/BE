@@ -32,6 +32,7 @@ import pika
 from urllib.parse import urlparse
 from pydantic import BaseModel
 from minio import Minio
+import time
 
 # Load environment variables
 load_dotenv()
@@ -287,8 +288,9 @@ def create_prompt(
 
         logging.debug(f"Successfully sent data to second API: {response.json()}")
 
+        time.sleep(3)
         db.refresh(new_prompt)
-        
+
         updated_prompt = db.query(Prompt).filter(Prompt.id == new_prompt.id).first()
 
         if updated_prompt.task_id is None:
