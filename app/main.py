@@ -32,7 +32,6 @@ import pika
 from urllib.parse import urlparse
 from pydantic import BaseModel
 from minio import Minio
-import time
 
 # Load environment variables
 load_dotenv()
@@ -288,21 +287,11 @@ def create_prompt(
 
         logging.debug(f"Successfully sent data to second API: {response.json()}")
 
-        time.sleep(3)
-        db.refresh(new_prompt)
-
-        updated_prompt = db.query(Prompt).filter(Prompt.id == new_prompt.id).first()
-
-        if updated_prompt.task_id is None:
-            raise HTTPException(status_code=500, detail="Task ID is not yet available")
-        
         return {column.name: getattr(new_prompt, column.name) for column in new_prompt.__table__.columns}
 
     except Exception as e:
         logging.error(f"Error creating prompt: {e}")
         raise HTTPException(status_code=500, detail=f"Error creating prompt: {e}")
-
-
 
 
 # 특정 user id에 대한 프롬프트 모두 보기
