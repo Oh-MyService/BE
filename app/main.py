@@ -285,25 +285,14 @@ def create_prompt(
             logging.error(f"Failed to send data to second API: {response.text}")
             raise HTTPException(status_code=500, detail="Failed to send data to second API")
 
-         # AI 응답에서 task_id 가져오기
-        task_id = response.json().get("task_id")
-        if not task_id:
-            raise HTTPException(status_code=500, detail="AI API에서 task_id를 찾을 수 없습니다.")
+        logging.debug(f"Successfully sent data to second API: {response.json()}")
 
-        # 데이터베이스에 task_id 저장
-        crud.update_record(db=db, model=Prompt, record_id=new_prompt.id, task_id=task_id)
-
-        # task_id 포함 응답 반환
-        return {
-            "prompt_id": new_prompt.id,
-            "task_id": task_id,
-            "content": content,
-            "ai_option": ai_option
-        }
+        return {column.name: getattr(new_prompt, column.name) for column in new_prompt.__table__.columns}
 
     except Exception as e:
         logging.error(f"Error creating prompt: {e}")
         raise HTTPException(status_code=500, detail=f"Error creating prompt: {e}")
+
 
 # 특정 user id에 대한 프롬프트 모두 보기
 @app.get("/api/prompts/user/{user_id}")
@@ -330,20 +319,6 @@ def get_prompt(prompt_id: int, db: Session = Depends(get_db), current_user: User
 
 
 ### results ###
-# result 올리기 -> 테스트용 
-# @app.post("/api/results")
-# async def create_result(prompt_id: int = Form(...), image: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-#     try:
-#         image_data = await image.read()
-#         result_data = {"prompt_id": prompt_id, "user_id": current_user.id, "image_data": image_data, "created_at": datetime.now()}
-#         db_result = crud.create_record(db=db, model=Result, **result_data)
-#         db_result.image_data = base64.b64encode(db_result.image_data).decode('utf-8')
-#         ResultResponse = sqlalchemy_to_pydantic(Result)
-#         return ResultResponse.from_orm(db_result)
-#     except Exception as e:
-#         raise HTTPException.status_code(500, detail=f"Error creating result: {e}")
-
-
 # 특정 prompt id에 대한 이미지 결과 모두 보기
 @app.get("/api/results/{prompt_id}")
 def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
