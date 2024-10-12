@@ -287,6 +287,11 @@ def create_prompt(
 
         logging.debug(f"Successfully sent data to second API: {response.json()}")
 
+        updated_prompt = db.query(Prompt).filter(Prompt.id == new_prompt.id).first()
+
+        if updated_prompt.task_id is None:
+            raise HTTPException(status_code=500, detail="Task ID is not yet available")
+        
         return {column.name: getattr(new_prompt, column.name) for column in new_prompt.__table__.columns}
 
     except Exception as e:
