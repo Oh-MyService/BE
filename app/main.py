@@ -288,16 +288,18 @@ def create_prompt(
         logging.debug(f"Successfully sent data to second API: {response.json()}")
 
         db.refresh(new_prompt)
+        
+        updated_prompt = db.query(Prompt).filter(Prompt.id == new_prompt.id).first()
 
-        # task_id 조회
-        if new_prompt.task_id is None:
+        if updated_prompt.task_id is None:
             raise HTTPException(status_code=500, detail="Task ID is not yet available")
-
+        
         return {column.name: getattr(new_prompt, column.name) for column in new_prompt.__table__.columns}
-    
+
     except Exception as e:
-        logging.error(f"Error while creating prompt: {str(e)}")
-        raise HTTPException(status_code=500, detail="An error occurred while creating the prompt")
+        logging.error(f"Error creating prompt: {e}")
+        raise HTTPException(status_code=500, detail=f"Error creating prompt: {e}")
+
 
 
 
