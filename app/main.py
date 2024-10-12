@@ -287,6 +287,8 @@ def create_prompt(
 
         logging.debug(f"Successfully sent data to second API: {response.json()}")
 
+        db.refresh(new_prompt)
+        
         return {column.name: getattr(new_prompt, column.name) for column in new_prompt.__table__.columns}
 
     except Exception as e:
