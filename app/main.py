@@ -1,7 +1,7 @@
-from fastapi import FastAPI, Depends, HTTPException, Request, Form, UploadFile, File, status
+from fastapi import FastAPI, Depends, HTTPException, Form,status
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional, Dict
+from typing import Optional
 from pydantic import create_model, BaseModel
 from dotenv import load_dotenv
 import redis
@@ -17,7 +17,7 @@ from jose import JWTError, jwt
 from app.database import get_db
 from . import crud
 from .models import User, Prompt, Result, Collection, CollectionResult
-from .utils import sqlalchemy_to_pydantic, create_access_token, decode_access_token, is_token_expired
+from .utils import  create_access_token, decode_access_token, is_token_expired
 import requests
 import os
 import uuid
@@ -28,7 +28,6 @@ from passlib.context import CryptContext
 from dotenv import load_dotenv
 from .database import SessionLocal
 from datetime import datetime, timezone
-import pika
 from urllib.parse import urlparse
 from pydantic import BaseModel
 from minio import Minio
@@ -199,6 +198,29 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     logging.debug(f"Authenticated user: {user.username}, ID: {user.id}")
     return user
 
+
+# 비밀번호 번경
+@app.put("/change-password")
+def change_password(
+    new_password: str = Form(...), 
+    token: str = Depends(verify_token), 
+    db: Session = Depends(get_db)
+):
+    user_id = token.get("user_id")
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+    # 새 비밀번호 해싱
+    hashed_password = pwd_context.hash(new_password)
+
+    # 사용자 비밀번호 업데이트
+    user.hashed_password = hashed_password
+    db.commit()
+
+    return {"message": "비밀번호가 성공적으로 변경되었습니다."}
+
 ### prompts ###
 # 이미지 생성 요청을 보낼 다른 FastAPI의 URL
 SECOND_API_URL = "http://118.67.128.129:27272/generate-image"
@@ -265,7 +287,7 @@ def create_prompt(
         logging.debug(f"Successfully sent data to second API: {response.json()}")
 
         db.refresh(new_prompt)
-        
+
         return {column.name: getattr(new_prompt, column.name) for column in new_prompt.__table__.columns}
 
     except Exception as e:
