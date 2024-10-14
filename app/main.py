@@ -198,29 +198,6 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     logging.debug(f"Authenticated user: {user.username}, ID: {user.id}")
     return user
 
-
-# 비밀번호 번경
-@app.put("/change-password")
-def change_password(
-    new_password: str = Form(...), 
-    token: str = Depends(verify_token), 
-    db: Session = Depends(get_db)
-):
-    user_id = token.get("user_id")
-    user = db.query(User).filter(User.id == user_id).first()
-
-    if not user:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
-
-    # 새 비밀번호 해싱
-    hashed_password = pwd_context.hash(new_password)
-
-    # 사용자 비밀번호 업데이트
-    user.hashed_password = hashed_password
-    db.commit()
-
-    return {"message": "비밀번호가 성공적으로 변경되었습니다."}
-
 ### prompts ###
 # 이미지 생성 요청을 보낼 다른 FastAPI의 URL
 SECOND_API_URL = "http://118.67.128.129:27272/generate-image"
