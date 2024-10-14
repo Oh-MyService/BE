@@ -113,32 +113,6 @@ class PromptRequest(BaseModel):
     content: Content
     ai_option: AIOption
 
-### task_id 디비 추가 ###  
-def update_prompt_with_task_id(prompt_id, task_id):
-    try:
-        connection = mysql.connector.connect(**db_config)
-        if connection.is_connected():
-            cursor = connection.cursor()
-
-            update_query = """
-            UPDATE prompts SET task_id = %s WHERE id = %s
-            """
-            cursor.execute(update_query, (task_id, prompt_id))
-            connection.commit()
-
-            logging.info(f"task_id {task_id} updated successfully for prompt_id {prompt_id}")
-    
-    except mysql.connector.Error as e:
-        logging.error(f"Error updating task_id in MySQL: {e}")
-        raise e
-    
-    finally:
-        if connection.is_connected():
-            cursor.close()
-            connection.close()
-            logging.info("MySQL connection closed")
-
-
 ### users ###
 def get_user_by_username(db: Session, username: str):
     return db.query(User).filter(User.username == username).first()
@@ -238,8 +212,6 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 ### prompts ###
 # 이미지 생성 요청을 보낼 다른 FastAPI의 URL
-SECOND_API_URL = "http://118.67.128.129:27272/generate-image"
-
 @app.post("/api/prompts")
 def create_prompt(
     positive_prompt: str = Form(...),  
@@ -285,13 +257,15 @@ def create_prompt(
         new_prompt = crud.create_record(db=db, model=Prompt, **prompt_data)
         logging.debug(f"Created new prompt: {new_prompt}")
 
+        # Celery task 생성
         task = generate_and_send_image.apply_async(
             args=(new_prompt.id, content, current_user.id, ai_option)
         )
         logging.debug(f"Celery task started with task_id: {task.id}")
 
-        update_prompt_with_task_id(new_prompt.id, task.id)
-
+        # task_id를 Prompt에 저장
+        new_prompt.task_id = task.id
+        db.commit()
         db.refresh(new_prompt)
 
         return {column.name: getattr(new_prompt, column.name) for column in new_prompt.__table__.columns}
