@@ -1,7 +1,7 @@
-from fastapi import FastAPI, Depends, HTTPException, Request, Form, UploadFile, File, status
+from fastapi import FastAPI, Depends, HTTPException, Form,status
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional, Dict
+from typing import Optional
 from pydantic import create_model, BaseModel
 from dotenv import load_dotenv
 import redis
@@ -17,7 +17,7 @@ from jose import JWTError, jwt
 from app.database import get_db
 from . import crud
 from .models import User, Prompt, Result, Collection, CollectionResult
-from .utils import sqlalchemy_to_pydantic, create_access_token, decode_access_token, is_token_expired
+from .utils import  create_access_token, decode_access_token, is_token_expired
 import requests
 import os
 import uuid
@@ -28,7 +28,6 @@ from passlib.context import CryptContext
 from dotenv import load_dotenv
 from .database import SessionLocal
 from datetime import datetime, timezone
-import pika
 from urllib.parse import urlparse
 from pydantic import BaseModel
 from minio import Minio
@@ -288,7 +287,7 @@ def create_prompt(
         logging.debug(f"Successfully sent data to second API: {response.json()}")
 
         db.refresh(new_prompt)
-        
+
         return {column.name: getattr(new_prompt, column.name) for column in new_prompt.__table__.columns}
 
     except Exception as e:

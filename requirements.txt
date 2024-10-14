@@ -17,5 +17,4 @@ python-jose
 passlib
 requests
 redis
-pika
 minio
