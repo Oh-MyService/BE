@@ -8,7 +8,7 @@ from minio.error import S3Error
 #import mysql.connector
 #from mysql.connector import Error
 from datetime import datetime
-import torch
+#import torch
 #from diffusers import StableDiffusionXLPipeline
 #from diffusers.models.lora import LoRACompatibleConv
 from celery import Celery
