@@ -38,12 +38,12 @@ bucket_name = "test"
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 
-logging.info(f"Is torch.cuda is available? : {torch.cuda.is_available()}")
+#logging.info(f"Is torch.cuda is available? : {torch.cuda.is_available()}")
 
-if torch.cuda.is_available():
-    logging.info(f"GPU is available. Using {torch.cuda.get_device_name(0)}")
-else:
-    logging.info("GPU is not available, using CPU instead.")
+#if torch.cuda.is_available():
+    #logging.info(f"GPU is available. Using {torch.cuda.get_device_name(0)}")
+#else:
+    #logging.info("GPU is not available, using CPU instead.")
 
 # Redis를 백엔드로 사용하도록 Celery 설정
 app = Celery('tasks', broker='amqp://guest:guest@118.67.128.129:5672//', backend='redis://118.67.128.129:6379/0')
@@ -61,13 +61,13 @@ redis_client = redis.Redis(host='118.67.128.129', port=6379, db=0)
 # Init pipeline
 pipeline = None
 
-def prepare_pipeline(model_name):
-    pipeline = StableDiffusionXLPipeline.from_single_file(
-        model_name, 
-        torch_dtype=torch.float16,  # float16 사용으로 GPU 메모리 효율화
-        variant="fp16"  # 16-bit floating point 사용
-    ).to('cuda')
-    return pipeline
+#def prepare_pipeline(model_name):
+    #pipeline = StableDiffusionXLPipeline.from_single_file(
+        #model_name, 
+        #torch_dtype=torch.float16,  # float16 사용으로 GPU 메모리 효율화
+        #variant="fp16"  # 16-bit floating point 사용
+    #).to('cuda')
+    #return pipeline
 
 def seamless_tiling(pipeline, x_axis, y_axis):
     def asymmetric_conv2d_convforward(self, input: torch.Tensor, weight: torch.Tensor, bias: Optional[torch.Tensor] = None):
