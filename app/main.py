@@ -32,6 +32,13 @@ from urllib.parse import urlparse
 from pydantic import BaseModel
 from minio import Minio
 
+# AI
+from celery.result import AsyncResult
+from celery_worker import generate_and_send_image, app as celery_app
+import mysql.connector
+from mysql.connector import Error
+from kombu import Connection
+
 # Load environment variables
 load_dotenv()
 

@@ -1,3 +1,4 @@
+# BE
 fastapi
 uvicorn[standard]
 pymysql
@@ -9,7 +10,6 @@ python-multipart
 aiofiles
 jinja2
 pyjwt
-
 jose
 bcrypt
 cryptography
@@ -18,3 +18,5 @@ passlib
 requests
 redis
 minio
+
+# AI
