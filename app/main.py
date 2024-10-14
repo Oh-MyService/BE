@@ -84,7 +84,6 @@ SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 180  # 나중에 수정 필요
 
-
 ### MinIO 클라이언트 설정
 minio_client = Minio(
     "118.67.128.129:9000",
@@ -94,19 +93,53 @@ minio_client = Minio(
 )
 bucket_name = "test"
 
+### AI ###
+# AIOption 모델 생성
+class AIOption(BaseModel):
+    width: int
+    height: int
+    background_color: str
+    mood: str
+    cfg_scale: float
+    sampling_steps: int
+    seed: int
 
-# MinIO에서 이미지 삭제
-def delete_image_from_minio(image_url: str, user_id: int, prompt_id: int):
+class Content(BaseModel):
+    positive_prompt: str
+    negative_prompt: str
+
+# PromptRequest 모델 생성
+class PromptRequest(BaseModel):
+    user_id: int
+    prompt_id: int
+    content: Content
+    ai_option: AIOption
+
+### task_id 디비 추가 ###  
+def update_prompt_with_task_id(prompt_id, task_id):
     try:
-        parsed_url = urlparse(image_url)
-        image_name = parsed_url.path.split('/')[-1] 
+        connection = mysql.connector.connect(**db_config)
+        if connection.is_connected():
+            cursor = connection.cursor()
 
-        object_name = f"{user_id}/{prompt_id}/{image_name}"
-        minio_client.remove_object(bucket_name, object_name)
-        print(f"MinIO에서 이미지 {object_name}가 성공적으로 삭제되었습니다.")
-    except Exception as e:
-        print(f"MinIO에서 이미지 삭제 중 오류 발생: {e}")
-        raise HTTPException(status_code=500, detail=f"MinIO에서 이미지 삭제 중 오류 발생: {e}")
+            update_query = """
+            UPDATE prompts SET task_id = %s WHERE id = %s
+            """
+            cursor.execute(update_query, (task_id, prompt_id))
+            connection.commit()
+
+            logging.info(f"task_id {task_id} updated successfully for prompt_id {prompt_id}")
+    
+    except mysql.connector.Error as e:
+        logging.error(f"Error updating task_id in MySQL: {e}")
+        raise e
+    
+    finally:
+        if connection.is_connected():
+            cursor.close()
+            connection.close()
+            logging.info("MySQL connection closed")
+
 
 ### users ###
 def get_user_by_username(db: Session, username: str):
@@ -254,21 +287,12 @@ def create_prompt(
         new_prompt = crud.create_record(db=db, model=Prompt, **prompt_data)
         logging.debug(f"Created new prompt: {new_prompt}")
 
-        # 외부 FastAPI로 프롬프트 전송
-        ai_input_data = {
-            "user_id": current_user.id,
-            "prompt_id": new_prompt.id,
-            "content": content,
-            "ai_option": ai_option
-        }
-        logging.debug(f"ai_option: {ai_input_data['ai_option']}")
-        response = requests.post(SECOND_API_URL, json=ai_input_data)
+        task = generate_and_send_image.apply_async(
+            args=(new_prompt.id, content, current_user.id, ai_option)
+        )
+        logging.debug(f"Celery task started with task_id: {task.id}")
 
-        if response.status_code != 200:
-            logging.error(f"Failed to send data to second API: {response.text}")
-            raise HTTPException(status_code=500, detail="Failed to send data to second API")
-
-        logging.debug(f"Successfully sent data to second API: {response.json()}")
+        update_prompt_with_task_id(new_prompt.id, task.id)
 
         db.refresh(new_prompt)
 
@@ -346,6 +370,20 @@ def get_user_results(user_id: int, db: Session = Depends(get_db), current_user: 
 
 
 # 최근 생성 삭제
+# MinIO에서 이미지 삭제
+def delete_image_from_minio(image_url: str, user_id: int, prompt_id: int):
+    try:
+        parsed_url = urlparse(image_url)
+        image_name = parsed_url.path.split('/')[-1] 
+
+        object_name = f"{user_id}/{prompt_id}/{image_name}"
+        minio_client.remove_object(bucket_name, object_name)
+        print(f"MinIO에서 이미지 {object_name}가 성공적으로 삭제되었습니다.")
+    except Exception as e:
+        print(f"MinIO에서 이미지 삭제 중 오류 발생: {e}")
+        raise HTTPException(status_code=500, detail=f"MinIO에서 이미지 삭제 중 오류 발생: {e}")
+
+
 @app.delete("/api/results/{result_id}", status_code=status.HTTP_200_OK)
 def delete_result(result_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     # 삭제할 result 조회
@@ -639,7 +677,39 @@ def get_queue_status(queue_name: str = 'celery'):  # 기본 큐 이름을 'celer
         raise HTTPException(status_code=500, detail=str(e))
 
 # 내 task_id 기준 남은 상황 반환
+@app.get("/task-status/{task_id}")
+async def get_task_status(task_id: str):
+    task_result = AsyncResult(task_id, app=celery_app)
+    queue_name = 'celery'  # 실제 큐 이름으로 변경하세요
 
+    # 작업 위치를 계산하는 함수
+    def get_task_position(task_id: str, queue_name: str):
+        with Connection(celery_app.conf.broker_url) as conn:
+            queue = conn.SimpleQueue(queue_name)
+            position = 0
+            while True:
+                message = queue.get(block=False)  # 블록하지 않고 메시지를 가져옴
+                if message is None:
+                    break
+                if message.payload.get('id') == task_id:
+                    queue.close()
+                    return position
+                position += 1
+            queue.close()
+        return None
+
+    position = get_task_position(task_id, queue_name)
+    
+    # 작업 상태 및 위치 반환
+    if task_result.state == 'PENDING':
+        return {"status": "PENDING", "position": position}
+    elif task_result.state == 'FAILURE':
+        return {"status": "FAILURE", "details": str(task_result.info), "position": position}
+    elif task_result.state == 'SUCCESS':
+        logging.info(f"Task {task_id} completed successfully.")
+        return {"status": "SUCCESS", "message": "Image generation completed"}
+    else:
+        return {"status": task_result.state, "position": position}    
 
 ##### password  ####
 # Gmail SMTP 설정

@@ -20,3 +20,4 @@ redis
 minio
 
 # AI
+celery==5.4.0
