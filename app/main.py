@@ -48,9 +48,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 # Define origins
 origins = [
     "http://118.67.128.129:28282",
-    "http://118.67.128.129:25252",
-    "http://118.67.128.129:27272",
-    "http://112.152.14.116:27272",
+    "http://118.67.128.129:25252"
 ]
 
 app.add_middleware(
