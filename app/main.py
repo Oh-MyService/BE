@@ -223,8 +223,8 @@ def create_prompt(
     logging.debug(f"Received request to create prompt with positive prompt: {positive_prompt} for user ID: {current_user.id}")
     try:
         content ={
-            "positive_prompt": str(positive_prompt) if positive_prompt is not None else None,
-            "negative_prompt": str(negative_prompt) if negative_prompt is not None else None
+            "positive_prompt": str(positive_prompt) if positive_prompt is not None else None
+            #"negative_prompt": str(negative_prompt) if negative_prompt is not None else None
         }
 
         ai_option = {
