@@ -46,7 +46,7 @@ logging.basicConfig(level=logging.INFO)
     #logging.info("GPU is not available, using CPU instead.")
 
 # Redis를 백엔드로 사용하도록 Celery 설정
-app = Celery('tasks', broker='amqp://guest:guest@118.67.128.129:5672//', backend='redis://118.67.128.129:6379/0')
+app = Celery('app.celery_worker', broker='amqp://guest:guest@118.67.128.129:5672//', backend='redis://118.67.128.129:6379/0')
 app.conf.update(
     broker_connection_retry_on_startup=True,
     broker_pool_limit=None,
