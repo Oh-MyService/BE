@@ -209,7 +209,6 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     return user
 
 ### prompts ###
-# 이미지 생성 요청을 보낼 다른 FastAPI의 URL
 @app.post("/api/prompts")
 def create_prompt(
     positive_prompt: str = Form(...),  
@@ -223,8 +222,8 @@ def create_prompt(
     logging.debug(f"Received request to create prompt with positive prompt: {positive_prompt} for user ID: {current_user.id}")
     try:
         content ={
-            "positive_prompt": str(positive_prompt) if positive_prompt is not None else None
-            #"negative_prompt": str(negative_prompt) if negative_prompt is not None else None
+            "positive_prompt": str(positive_prompt) if positive_prompt is not None else None,
+            "negative_prompt": " "#str(negative_prompt) if negative_prompt is not None else None
         }
 
         ai_option = {
