@@ -34,7 +34,7 @@ from minio import Minio
 
 # AI
 from celery.result import AsyncResult
-from .celery_worker import generate_and_send_image, app as celery_app
+from celery_worker import generate_and_send_image, app as celery_app
 from kombu import Connection
 
 # Load environment variables
