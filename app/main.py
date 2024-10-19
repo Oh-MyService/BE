@@ -599,7 +599,7 @@ def get_task_progress(task_id: str):
         progress_data = redis_client.get(redis_key)
 
         if not progress_data:
-            raise HTTPException(status_code=404, detail="Progress data not found")
+            raise HTTPException(status_code=404, detail="Progress data not found, 작업중이지 않거나 끝남")
 
         progress_info = json.loads(progress_data)
         return {
