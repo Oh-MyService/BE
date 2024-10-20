@@ -38,7 +38,7 @@ from celery_worker import generate_and_send_image, app as celery_app
 from kombu import Connection
 import requests
 from requests.auth import HTTPBasicAuth
-from celery.result import AsyncResult
+from celery.app.control import Inspect
 
 # Load environment variables
 load_dotenv()
@@ -645,24 +645,6 @@ def get_queue_status(queue_name: str = 'celery'):  # 기본 큐 이름을 'celer
         raise HTTPException(status_code=500, detail=str(e))
 
 # 내 task_id 기준 남은 상황 반환
-def get_all_tasks_in_queue(queue_name: str):
-    url = f"http://118.67.128.129:15672/api/queues/%2F/{queue_name}/get"  # RabbitMQ 관리 API
-    payload = {
-        "count": 1000,  # 큐에서 최대 1000개의 메시지를 가져옴
-        "ackmode": "ack_requeue_false",
-        "encoding": "auto",
-        "truncate": 50000
-    }
-    try:
-        response = requests.post(url, json=payload, auth=HTTPBasicAuth('guest', 'guest'))
-        if response.status_code == 200:
-            tasks = response.json()
-            return tasks
-        else:
-            raise Exception(f"Failed to retrieve tasks from queue: {response.status_code} {response.text}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error retrieving tasks: {e}")
-
 @app.get("/task_position/{task_id}")
 def get_task_position(task_id: str, queue_name: str = 'celery'):
     try:
@@ -673,21 +655,35 @@ def get_task_position(task_id: str, queue_name: str = 'celery'):
         if task_result.status in ["SUCCESS", "FAILURE", "REVOKED"]:
             return {"message": f"Task {task_id} is already {task_result.status.lower()}"}
 
-        # 큐에 있는 모든 작업 가져오기
-        tasks_in_queue = get_all_tasks_in_queue(queue_name)
+        # Celery의 inspect를 사용하여 큐의 상태를 확인
+        i = celery_app.control.inspect()
+        active_tasks = i.active()
+        reserved_tasks = i.reserved()
 
-        # task_id 기준으로 앞에 있는 작업 개수 세기
-        position = 0
-        for task in tasks_in_queue:
-            if task['properties']['correlation_id'] == task_id:
-                break
-            position += 1
+        # 대기 중인 작업 수를 카운트
+        total_waiting_tasks = 0
 
+        # reserved 상태의 작업 중에서 해당 task_id의 위치를 찾습니다.
+        if reserved_tasks:
+            for worker, tasks in reserved_tasks.items():
+                for task in tasks:
+                    if task['id'] == task_id:
+                        return {"message": f"Task {task_id} is reserved and waiting to be processed."}
+                    total_waiting_tasks += 1
+
+        # active 상태의 작업에서 task_id가 이미 처리 중인지 확인합니다.
+        if active_tasks:
+            for worker, tasks in active_tasks.items():
+                for task in tasks:
+                    if task['id'] == task_id:
+                        return {"message": f"Task {task_id} is currently being processed by {worker}."}
+
+        # task_id가 큐에 있고 몇 개의 작업이 남았는지 계산
         return {
             "task_id": task_id,
             "status": task_result.status,
-            "remaining_tasks_before_yours": position,
-            "message": f"Task {task_id} has {position} tasks ahead in the queue."
+            "remaining_tasks_in_queue": total_waiting_tasks,
+            "message": f"Task {task_id} has {total_waiting_tasks} tasks ahead in the queue."
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving task position: {e}")
