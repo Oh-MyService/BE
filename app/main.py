@@ -646,6 +646,7 @@ def get_queue_status(queue_name: str = 'celery'):  # 기본 큐 이름을 'celer
 
 # 내 task_id 기준 남은 상황 반환
 # RabbitMQ API로부터 큐의 작업 목록을 가져오는 함수
+# RabbitMQ API로부터 큐의 작업 목록을 가져오는 함수
 def get_rabbitmq_queue_messages(queue_name: str):
     url = f"http://118.67.128.129:15672/api/queues/%2F/{queue_name}/get"
     headers = {'Content-Type': 'application/json'}
@@ -666,29 +667,31 @@ def get_rabbitmq_queue_messages(queue_name: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving RabbitMQ queue messages: {e}")
 
-@app.get("/task_queue_status/{task_id}")
-def get_task_queue_position(task_id: str):
+# 전체 task 반환
+@app.get("/task_queue_order")
+def get_task_queue_order():
     # 큐 상태에서 대기 중인 작업들 확인
     queue_messages = get_rabbitmq_queue_messages("celery")
+
+    # 전체 task ID 목록을 추출
+    task_ids = []
+    for message in queue_messages:
+        task_id = message["properties"].get("correlation_id")
+        if task_id:
+            task_ids.append(task_id)
     
-    # 내 테스크가 대기열에 있는지 확인
-    task_position = None
-    for index, message in enumerate(queue_messages):
-        if message["properties"]["correlation_id"] == task_id:
-            task_position = index
-            break
-    
-    if task_position is not None:
-        return {"task_id": task_id, "position_in_queue": task_position, "tasks_before": task_position}
-    else:
-        # 내 작업이 큐에 없을 수도 있으니 Celery 상태도 확인
+    # 현재 생성 중인 작업을 식별하기 위해 상태 확인
+    in_progress_task = None
+    for task_id in task_ids:
         task_result = AsyncResult(task_id, app=celery_app)
-        if task_result.state == "PENDING":
-            return {"task_id": task_id, "message": "Task not found in queue, but still pending"}
-        elif task_result.state == "STARTED":
-            return {"task_id": task_id, "message": "Task is currently being processed"}
-        else:
-            return {"task_id": task_id, "message": f"Task is already {task_result.state}"}
+        if task_result.state == "STARTED":
+            in_progress_task = task_id
+            break
+
+    return {
+        "in_progress_task": in_progress_task,
+        "all_tasks_in_queue": task_ids
+    }
 
 
 ##### password  ####
