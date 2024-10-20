@@ -623,25 +623,34 @@ def get_task_progress(task_id: str, db: Session = Depends(get_db)):
 @app.get("/api/prompts/count_wait/{task_id}")
 def count_success_prompts(task_id: str, db: Session = Depends(get_db)):
     try:
-        # Find the record with the given task_id
-        latest_prompt = db.query(Prompt).filter(Prompt.task_id == task_id).first()
+        # 주어진 task_id로 해당 프롬프트 찾기
+        target_prompt = db.query(Prompt).filter(Prompt.task_id == task_id).first()
         
-        if not latest_prompt:
-            raise HTTPException(status_code=404, detail="Prompt not found for the given task_id")
+        if not target_prompt:
+            raise HTTPException(status_code=404, detail="해당 task_id에 대한 프롬프트를 찾을 수 없습니다.")
 
-        # Get the created_at timestamp for the latest prompt
-        created_at_limit = latest_prompt.created_at
+        # 해당 프롬프트의 created_at 시간 가져오기
+        target_created_at = target_prompt.created_at
 
-        # Count the number of prompts with 'success' status up to and including the latest prompt
-        count_success = db.query(Prompt).filter(
+        # 가장 최근에 생성된 'success' 상태의 프롬프트 찾기
+        last_success_prompt = db.query(Prompt).filter(
             Prompt.status == "success",
-            Prompt.created_at <= created_at_limit
+            Prompt.created_at <= target_created_at
+        ).order_by(Prompt.created_at.desc()).first()
+
+        if not last_success_prompt:
+            raise HTTPException(status_code=404, detail="가장 최근의 성공한 프롬프트를 찾을 수 없습니다.")
+
+        # target_prompt에서 마지막 success 프롬프트까지의 남은 프롬프트 개수 계산
+        remaining_prompts_count = db.query(Prompt).filter(
+            Prompt.created_at > last_success_prompt.created_at,
+            Prompt.created_at <= target_created_at
         ).count()
 
-        return {"success_count": count_success}
+        return {"remaining_count": remaining_prompts_count}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error counting successful prompts: {e}")
+        raise HTTPException(status_code=500, detail=f"남은 프롬프트 개수를 세는 중 오류 발생: {e}")
 
 
 # RabbitMQ 관리 API를 통해 큐 상태 가져오기
