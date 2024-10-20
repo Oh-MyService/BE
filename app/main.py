@@ -644,49 +644,6 @@ def get_queue_status(queue_name: str = 'celery'):  # 기본 큐 이름을 'celer
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# 내 task_id 기준 남은 상황 반환
-@app.get("/task_position/{task_id}")
-def get_task_position(task_id: str, queue_name: str = 'celery'):
-    try:
-        # Task 상태를 Celery에서 가져옵니다.
-        task_result = AsyncResult(task_id, app=celery_app)
-
-        # 만약 작업이 이미 완료되었거나 실패했다면, 대기 중인 작업이 아니므로 즉시 반환
-        if task_result.status in ["SUCCESS", "FAILURE", "REVOKED"]:
-            return {"message": f"Task {task_id} is already {task_result.status.lower()}"}
-
-        # Celery의 inspect를 사용하여 큐의 상태를 확인
-        i = celery_app.control.inspect()
-        active_tasks = i.active()
-        reserved_tasks = i.reserved()
-
-        # 대기 중인 작업 수를 카운트
-        total_waiting_tasks = 0
-
-        # reserved 상태의 작업 중에서 해당 task_id의 위치를 찾습니다.
-        if reserved_tasks:
-            for worker, tasks in reserved_tasks.items():
-                for task in tasks:
-                    if task['id'] == task_id:
-                        return {"message": f"Task {task_id} is reserved and waiting to be processed."}
-                    total_waiting_tasks += 1
-
-        # active 상태의 작업에서 task_id가 이미 처리 중인지 확인합니다.
-        if active_tasks:
-            for worker, tasks in active_tasks.items():
-                for task in tasks:
-                    if task['id'] == task_id:
-                        return {"message": f"Task {task_id} is currently being processed by {worker}."}
-
-        # task_id가 큐에 있고 몇 개의 작업이 남았는지 계산
-        return {
-            "task_id": task_id,
-            "status": task_result.status,
-            "remaining_tasks_in_queue": total_waiting_tasks,
-            "message": f"Task {task_id} has {total_waiting_tasks} tasks ahead in the queue."
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error retrieving task position: {e}")
 
 ##### password  ####
 # Gmail SMTP 설정
