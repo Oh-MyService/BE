@@ -643,26 +643,31 @@ def get_queue_status(queue_name: str = 'celery'):  # 기본 큐 이름을 'celer
 
 # 내 task_id 기준 남은 상황 반환
 # RabbitMQ 관리 API에서 큐 상태를 가져와 작업 순서 확인
-def get_task_position(task_id: str, queue_name: str):
-    url = f"http://118.67.128.129:15672/api/queues/%2F/{queue_name}"  # RabbitMQ 관리 API 접근 경로
+def get_rabbitmq_queue_status(queue_name: str):
+    url = f"http://118.67.128.129:15672/api/queues/%2F/{queue_name}"  # %2F는 기본 vhost를 의미
     try:
-        response = requests.get(url, auth=HTTPBasicAuth('guest', 'guest'))
+        response = requests.get(url, auth=HTTPBasicAuth('guest', 'guest'))  # RabbitMQ 관리 API에 접근
         if response.status_code == 200:
             data = response.json()
 
-            # 메시지들의 목록을 가져와 해당 task_id가 몇 번째인지 확인
-            messages = data.get("messages", [])
-            position = 0
+            # 로그 추가하여 구조 확인
+            logging.debug(f"RabbitMQ queue data: {data}")
 
-            for message in messages:
-                if message.get("id") == task_id:  
-                    return position
-                position += 1
-            return None  
+            ready_count = data.get("messages_ready", 0)  
+            unacked_count = data.get("messages_unacknowledged", 0)  
+            total_count = data.get("messages", 0)  
+
+            # messages가 리스트인지 확인
+            messages = data.get("messages", [])
+            if not isinstance(messages, list):
+                raise HTTPException(status_code=500, detail="Expected 'messages' to be a list but got a different type.")
+            
+            return ready_count, unacked_count, total_count
         else:
             raise Exception(f"Failed to retrieve queue status: {response.status_code} {response.text}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving RabbitMQ queue status: {e}")
+
 
 @app.get("/task-status/{task_id}")
 async def get_task_status(task_id: str):
