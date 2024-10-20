@@ -645,40 +645,43 @@ def get_queue_status(queue_name: str = 'celery'):  # 기본 큐 이름을 'celer
         raise HTTPException(status_code=500, detail=str(e))
 
 # 내 task_id 기준 남은 상황 반환
-# Get task status by task_id
-@app.get("/task_status/{task_id}")
-def get_task_status(task_id: str):
+# RabbitMQ 관리 API를 통해 큐 상태를 가져오는 함수
+def get_rabbitmq_queue_status(queue_name: str):
+    url = f"http://118.67.128.129:15672/api/queues/%2F/{queue_name}"  # %2F는 기본 vhost를 의미
     try:
-        result = AsyncResult(task_id, app=celery_app)
-        return {
-            "task_id": task_id,
-            "status": result.status,
-            "result": result.result
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error retrieving task status: {e}")
-
-# Get RabbitMQ queue status
-@app.get("/rabbitmq/queue_status")
-def get_queue_status(queue_name: str = 'celery'):
-    try:
-        url = f"http://118.67.128.129:15672/api/queues/%2F/{queue_name}"
-        response = requests.get(url, auth=HTTPBasicAuth('guest', 'guest'))
+        response = requests.get(url, auth=HTTPBasicAuth('guest', 'guest'))  # RabbitMQ 관리 API에 접근
         if response.status_code == 200:
             data = response.json()
-            ready_count = data.get("messages_ready", 0)
-            unacked_count = data.get("messages_unacknowledged", 0)
-            total_count = data.get("messages", 0)
-            return {
-                "queue_name": queue_name,
-                "ready_count": ready_count,
-                "unacked_count": unacked_count,
-                "total_count": total_count
-            }
+            ready_count = data.get("messages_ready", 0)  # 대기 중인 작업 수
+            return ready_count
         else:
             raise Exception(f"Failed to retrieve queue status: {response.status_code} {response.text}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving RabbitMQ queue status: {e}")
+
+# Task ID를 이용해 몇 개 앞에 작업이 남았는지 확인하는 함수
+@app.get("/task_position/{task_id}")
+def get_task_position(task_id: str, queue_name: str = 'celery'):
+    try:
+        # Task 상태를 Celery에서 가져옵니다.
+        task_result = AsyncResult(task_id, app=celery_app)
+
+        # 만약 작업이 이미 완료되었거나 실패했다면, 대기 중인 작업이 아니므로 즉시 반환
+        if task_result.status in ["SUCCESS", "FAILURE", "REVOKED"]:
+            return {"message": f"Task {task_id} is already {task_result.status.lower()}"}
+
+        # 큐에 남아있는 대기 작업 수를 RabbitMQ에서 가져옵니다.
+        remaining_tasks = get_rabbitmq_queue_status(queue_name)
+
+        # 결과를 반환 (대략적인 순번을 확인 가능)
+        return {
+            "task_id": task_id,
+            "status": task_result.status,
+            "remaining_tasks_in_queue": remaining_tasks,
+            "message": f"Task {task_id} has {remaining_tasks} tasks ahead in the queue."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving task position: {e}")
 
 ##### password  ####
 # Gmail SMTP 설정
