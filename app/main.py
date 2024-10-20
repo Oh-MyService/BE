@@ -642,39 +642,46 @@ def get_queue_status(queue_name: str = 'celery'):  # 기본 큐 이름을 'celer
         raise HTTPException(status_code=500, detail=str(e))
 
 # 내 task_id 기준 남은 상황 반환
+# RabbitMQ 관리 API에서 큐 상태를 가져와 작업 순서 확인
+def get_task_position(task_id: str, queue_name: str):
+    url = f"http://118.67.128.129:15672/api/queues/%2F/{queue_name}"  # RabbitMQ 관리 API 접근 경로
+    try:
+        response = requests.get(url, auth=HTTPBasicAuth('guest', 'guest'))
+        if response.status_code == 200:
+            data = response.json()
+
+            # 메시지들의 목록을 가져와 해당 task_id가 몇 번째인지 확인
+            messages = data.get("messages", [])
+            position = 0
+
+            for message in messages:
+                if message.get("id") == task_id:  
+                    return position
+                position += 1
+            return None  
+        else:
+            raise Exception(f"Failed to retrieve queue status: {response.status_code} {response.text}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving RabbitMQ queue status: {e}")
+
 @app.get("/task-status/{task_id}")
 async def get_task_status(task_id: str):
     task_result = AsyncResult(task_id, app=celery_app)
-    queue_name = 'celery'  # 실제 큐 이름으로 변경하세요
+    queue_name = 'celery'  
 
-    # 작업 위치를 계산하는 함수
-    def get_task_position(task_id: str, queue_name: str):
-        with Connection(celery_app.conf.broker_url) as conn:
-            queue = conn.SimpleQueue(queue_name)
-            position = 0
-            while True:
-                message = queue.get(block=False)  # 블록하지 않고 메시지를 가져옴
-                if message is None:
-                    break
-                if message.payload.get('id') == task_id:
-                    queue.close()
-                    return position
-                position += 1
-            queue.close()
-        return None
-
+    # RabbitMQ에서 작업 위치 가져오기
     position = get_task_position(task_id, queue_name)
     
     # 작업 상태 및 위치 반환
     if task_result.state == 'PENDING':
-        return {"status": "PENDING", "position": position}
+        return {"status": "PENDING", "position": position}  
     elif task_result.state == 'FAILURE':
         return {"status": "FAILURE", "details": str(task_result.info), "position": position}
     elif task_result.state == 'SUCCESS':
-        logging.info(f"Task {task_id} completed successfully.")
         return {"status": "SUCCESS", "message": "Image generation completed"}
     else:
-        return {"status": task_result.state, "position": position}    
+        return {"status": task_result.state, "position": position}
+
 
 ##### password  ####
 # Gmail SMTP 설정
