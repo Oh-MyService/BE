@@ -19,6 +19,7 @@ import redis  # Redis 라이브러리 추가
 from app.crud import update_record  
 from app.models import Prompt  
 from app.database import SessionLocal
+from sqlalchemy.orm import Session
 
 # MySQL 데이터베이스 설정
 db_config = {
@@ -119,12 +120,12 @@ def upload_image_to_minio(image_path, image_name, user_id, prompt_id):
 # 작업 완료 시 상태 업데이트 
 def update_task_status(db: Session, task_id: str):
     try:
-        # task_id를 기준으로
+        # task_id를 기준으로 Prompt 테이블에서 레코드를 조회하고 상태를 업데이트
         update_record(db, Prompt, task_id, status="success")
         logging.info(f"Task {task_id} 상태가 성공적으로 업데이트되었습니다.")
     except Exception as e:
         logging.error(f"Task 상태 업데이트 중 오류 발생: {e}")
-
+        
 
 @app.task(bind=True, max_retries=0, acks_late=True)
 def generate_and_send_image(self, prompt_id, image_data, user_id, options):
