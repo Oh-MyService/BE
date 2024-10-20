@@ -650,7 +650,6 @@ def get_rabbitmq_queue_status(queue_name: str):
         if response.status_code == 200:
             data = response.json()
 
-            # 로그 추가하여 구조 확인
             logging.debug(f"RabbitMQ queue data: {data}")
 
             ready_count = data.get("messages_ready", 0)  
