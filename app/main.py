@@ -32,13 +32,11 @@ from urllib.parse import urlparse
 from pydantic import BaseModel
 from minio import Minio
 
+
 # AI
-from celery.result import AsyncResult
 from celery_worker import generate_and_send_image, app as celery_app
-from kombu import Connection
 import requests
 from requests.auth import HTTPBasicAuth
-from celery.app.control import Inspect
 
 # Load environment variables
 load_dotenv()
