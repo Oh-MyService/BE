@@ -645,53 +645,6 @@ def get_queue_status(queue_name: str = 'celery'):  # 기본 큐 이름을 'celer
         raise HTTPException(status_code=500, detail=str(e))
 
 # 내 task_id 기준 남은 상황 반환
-# RabbitMQ API로부터 큐의 작업 목록을 가져오는 함수
-# RabbitMQ API로부터 큐의 작업 목록을 가져오는 함수
-def get_rabbitmq_queue_messages(queue_name: str):
-    url = f"http://118.67.128.129:15672/api/queues/%2F/{queue_name}/get"
-    headers = {'Content-Type': 'application/json'}
-    body = json.dumps({
-        "count": 1000,  # 한번에 가져올 최대 메시지 수
-        "ackmode": "ack_requeue_true",
-        "encoding": "auto",
-        "truncate": 50000
-    })
-
-    try:
-        response = requests.post(url, data=body, headers=headers, auth=HTTPBasicAuth('guest', 'guest'))
-        if response.status_code == 200:
-            messages = response.json()
-            return messages
-        else:
-            raise Exception(f"Failed to retrieve queue messages: {response.status_code} {response.text}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error retrieving RabbitMQ queue messages: {e}")
-
-# 전체 task 반환
-@app.get("/task_queue_order")
-def get_task_queue_order():
-    # 큐 상태에서 대기 중인 작업들 확인
-    queue_messages = get_rabbitmq_queue_messages("celery")
-
-    # 전체 task ID 목록을 추출
-    task_ids = []
-    for message in queue_messages:
-        task_id = message["properties"].get("correlation_id")
-        if task_id:
-            task_ids.append(task_id)
-    
-    # 현재 생성 중인 작업을 식별하기 위해 상태 확인
-    in_progress_task = None
-    for task_id in task_ids:
-        task_result = AsyncResult(task_id, app=celery_app)
-        if task_result.state == "STARTED":
-            in_progress_task = task_id
-            break
-
-    return {
-        "in_progress_task": in_progress_task,
-        "all_tasks_in_queue": task_ids
-    }
 
 
 ##### password  ####
