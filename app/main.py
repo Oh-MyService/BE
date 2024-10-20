@@ -645,7 +645,40 @@ def get_queue_status(queue_name: str = 'celery'):  # 기본 큐 이름을 'celer
         raise HTTPException(status_code=500, detail=str(e))
 
 # 내 task_id 기준 남은 상황 반환
+# Get task status by task_id
+@app.get("/task_status/{task_id}")
+def get_task_status(task_id: str):
+    try:
+        result = AsyncResult(task_id, app=celery_app)
+        return {
+            "task_id": task_id,
+            "status": result.status,
+            "result": result.result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving task status: {e}")
 
+# Get RabbitMQ queue status
+@app.get("/rabbitmq/queue_status")
+def get_queue_status(queue_name: str = 'celery'):
+    try:
+        url = f"http://118.67.128.129:15672/api/queues/%2F/{queue_name}"
+        response = requests.get(url, auth=HTTPBasicAuth('guest', 'guest'))
+        if response.status_code == 200:
+            data = response.json()
+            ready_count = data.get("messages_ready", 0)
+            unacked_count = data.get("messages_unacknowledged", 0)
+            total_count = data.get("messages", 0)
+            return {
+                "queue_name": queue_name,
+                "ready_count": ready_count,
+                "unacked_count": unacked_count,
+                "total_count": total_count
+            }
+        else:
+            raise Exception(f"Failed to retrieve queue status: {response.status_code} {response.text}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving RabbitMQ queue status: {e}")
 
 ##### password  ####
 # Gmail SMTP 설정
