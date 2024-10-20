@@ -645,7 +645,24 @@ def get_queue_status(queue_name: str = 'celery'):  # 기본 큐 이름을 'celer
         raise HTTPException(status_code=500, detail=str(e))
 
 # 내 task_id 기준 남은 상황 반환
-# RabbitMQ 관리 API를 통해 큐 상태를 가져오는 함수
+def get_all_tasks_in_queue(queue_name: str):
+    url = f"http://118.67.128.129:15672/api/queues/%2F/{queue_name}/get"  # RabbitMQ 관리 API
+    payload = {
+        "count": 1000,  # 큐에서 최대 1000개의 메시지를 가져옴
+        "ackmode": "ack_requeue_false",
+        "encoding": "auto",
+        "truncate": 50000
+    }
+    try:
+        response = requests.post(url, json=payload, auth=HTTPBasicAuth('guest', 'guest'))
+        if response.status_code == 200:
+            tasks = response.json()
+            return tasks
+        else:
+            raise Exception(f"Failed to retrieve tasks from queue: {response.status_code} {response.text}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving tasks: {e}")
+
 @app.get("/task_position/{task_id}")
 def get_task_position(task_id: str, queue_name: str = 'celery'):
     try:
@@ -656,15 +673,21 @@ def get_task_position(task_id: str, queue_name: str = 'celery'):
         if task_result.status in ["SUCCESS", "FAILURE", "REVOKED"]:
             return {"message": f"Task {task_id} is already {task_result.status.lower()}"}
 
-        # 큐에 남아있는 대기 작업 수를 RabbitMQ에서 가져옵니다.
-        remaining_tasks = get_rabbitmq_queue_status(queue_name)
+        # 큐에 있는 모든 작업 가져오기
+        tasks_in_queue = get_all_tasks_in_queue(queue_name)
 
-        # 결과를 반환 (대략적인 순번을 확인 가능)
+        # task_id 기준으로 앞에 있는 작업 개수 세기
+        position = 0
+        for task in tasks_in_queue:
+            if task['properties']['correlation_id'] == task_id:
+                break
+            position += 1
+
         return {
             "task_id": task_id,
             "status": task_result.status,
-            "remaining_tasks_in_queue": remaining_tasks,
-            "message": f"Task {task_id} has {remaining_tasks} tasks ahead in the queue."
+            "remaining_tasks_before_yours": position,
+            "message": f"Task {task_id} has {position} tasks ahead in the queue."
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving task position: {e}")
