@@ -36,6 +36,9 @@ from minio import Minio
 from celery.result import AsyncResult
 from celery_worker import generate_and_send_image, app as celery_app
 from kombu import Connection
+import requests
+from requests.auth import HTTPBasicAuth
+from celery.result import AsyncResult
 
 # Load environment variables
 load_dotenv()
@@ -642,45 +645,50 @@ def get_queue_status(queue_name: str = 'celery'):  # 기본 큐 이름을 'celer
         raise HTTPException(status_code=500, detail=str(e))
 
 # 내 task_id 기준 남은 상황 반환
-# RabbitMQ 관리 API에서 큐 상태를 가져와 작업 순서 확인
-def get_task_position(task_id: str, queue_name: str):
-    url = f"http://118.67.128.129:15672/api/queues/%2F/{queue_name}"  # RabbitMQ 관리 API 접근 경로
+# RabbitMQ API로부터 큐의 작업 목록을 가져오는 함수
+def get_rabbitmq_queue_messages(queue_name: str):
+    url = f"http://118.67.128.129:15672/api/queues/%2F/{queue_name}/get"
+    headers = {'Content-Type': 'application/json'}
+    body = json.dumps({
+        "count": 1000,  # 한번에 가져올 최대 메시지 수
+        "ackmode": "ack_requeue_true",
+        "encoding": "auto",
+        "truncate": 50000
+    })
+
     try:
-        response = requests.get(url, auth=HTTPBasicAuth('guest', 'guest'))
+        response = requests.post(url, data=body, headers=headers, auth=HTTPBasicAuth('guest', 'guest'))
         if response.status_code == 200:
-            data = response.json()
-
-            # 메시지들의 목록을 가져와 해당 task_id가 몇 번째인지 확인
-            messages = data.get("messages", [])
-            position = 0
-
-            for message in messages:
-                if message.get("id") == task_id:  
-                    return position
-                position += 1
-            return None  
+            messages = response.json()
+            return messages
         else:
-            raise Exception(f"Failed to retrieve queue status: {response.status_code} {response.text}")
+            raise Exception(f"Failed to retrieve queue messages: {response.status_code} {response.text}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error retrieving RabbitMQ queue status: {e}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving RabbitMQ queue messages: {e}")
 
-@app.get("/task-status/{task_id}")
-async def get_task_status(task_id: str):
-    task_result = AsyncResult(task_id, app=celery_app)
-    queue_name = 'celery'  
-
-    # RabbitMQ에서 작업 위치 가져오기
-    position = get_task_position(task_id, queue_name)
+@app.get("/task_queue_status/{task_id}")
+def get_task_queue_position(task_id: str):
+    # 큐 상태에서 대기 중인 작업들 확인
+    queue_messages = get_rabbitmq_queue_messages("celery")
     
-    # 작업 상태 및 위치 반환
-    if task_result.state == 'PENDING':
-        return {"status": "PENDING", "position": position}  
-    elif task_result.state == 'FAILURE':
-        return {"status": "FAILURE", "details": str(task_result.info), "position": position}
-    elif task_result.state == 'SUCCESS':
-        return {"status": "SUCCESS", "message": "Image generation completed"}
+    # 내 테스크가 대기열에 있는지 확인
+    task_position = None
+    for index, message in enumerate(queue_messages):
+        if message["properties"]["correlation_id"] == task_id:
+            task_position = index
+            break
+    
+    if task_position is not None:
+        return {"task_id": task_id, "position_in_queue": task_position, "tasks_before": task_position}
     else:
-        return {"status": task_result.state, "position": position}
+        # 내 작업이 큐에 없을 수도 있으니 Celery 상태도 확인
+        task_result = AsyncResult(task_id, app=celery_app)
+        if task_result.state == "PENDING":
+            return {"task_id": task_id, "message": "Task not found in queue, but still pending"}
+        elif task_result.state == "STARTED":
+            return {"task_id": task_id, "message": "Task is currently being processed"}
+        else:
+            return {"task_id": task_id, "message": f"Task is already {task_result.state}"}
 
 
 ##### password  ####
