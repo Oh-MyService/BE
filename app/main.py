@@ -275,23 +275,27 @@ def create_prompt(
 @app.get("/api/results/{prompt_id}")
 def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
+        # 프롬프트 조회
         prompt = crud.get_record(db=db, model=Prompt, record_id=prompt_id)
-        if not prompt or prompt.user_id != current_user.id:
-            raise HTTPException(status_code=404, detail="Prompt not found or not authorized")
+        if not prompt:
+            raise HTTPException(status_code=404, detail="프롬프트를 찾을 수 없습니다.")
+        if prompt.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="해당 프롬프트에 접근할 권한이 없습니다.")
 
+        # 프롬프트 상태가 success 인지 확인
+        if prompt.status != "success":
+            raise HTTPException(status_code=400, detail="프롬프트 상태가 'success'가 아닙니다.")
+
+        # 결과 조회
         results = db.query(Result).filter(Result.prompt_id == prompt_id).all()
-
-        # 이미지의 개수가 4개인지 확인
-        if len(results) != 4:
-            return {"message": f"Expected 4 images, but found {len(results)} images", "results": results}
 
         for result in results:
             result.image_data = result.image_data  # MinIO URL
 
-        return {"message": "Successfully fetched all images for the prompt", "results": results}
+        return {"message": "성공적으로 모든 이미지를 가져왔습니다.", "results": results}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching prompt results: {e}")
+        raise HTTPException(status_code=500, detail=f"프롬프트 결과를 가져오는 중 오류 발생: {e}")
 
 
 # 특정 user id에 대한 이미지 결과 모두 보기
