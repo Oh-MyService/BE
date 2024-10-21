@@ -267,31 +267,7 @@ def create_prompt(
     except Exception as e:
         logging.error(f"Error creating prompt: {e}")
         raise HTTPException(status_code=500, detail=f"Error creating prompt: {e}")
-
-
-# 특정 user id에 대한 프롬프트 모두 보기
-@app.get("/api/prompts/user/{user_id}")
-def get_user_prompts(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.id != user_id:
-        logging.error("Not authorized to access this user's prompts")
-        raise HTTPException(status_code=403, detail="Not authorized to access this user's prompts")
-    try:
-        return db.query(Prompt).filter(Prompt.user_id == user_id).all()
-    except Exception as e:
-        logging.error(f"Error fetching user prompts: {e}")
-        raise HTTPException.status_code(500, detail=f"Error fetching user prompts: {e}")
-
-# 특정 prompt id에 대한 프롬프트 보기
-@app.get("/api/prompts/{prompt_id}")
-def get_prompt(prompt_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    try:
-        prompt = crud.get_record(db=db, model=Prompt, record_id=prompt_id)
-        if not prompt or prompt.user_id != current_user.id:
-            raise HTTPException.status_code(404, detail="Prompt not found or not authorized")
-        return prompt
-    except Exception as e:
-        raise HTTPException.status_code(500, detail=f"Error fetching prompt: {e}")
-
+  
 
 ### results ###
 # 특정 prompt id에 대한 이미지 결과 모두 보기
@@ -602,14 +578,6 @@ def get_task_progress(task_id: str, db: Session = Depends(get_db)):
             raise HTTPException(status_code=404, detail="Progress data not found, 작업중이지 않거나 끝남")
 
         progress_info = json.loads(progress_data)
-        progress = progress_info.get("progress")
-
-        if progress == 100:
-            prompt = db.query(Prompt).filter(Prompt.task_id == task_id).first()
-            if prompt:
-                prompt.status = 'success'
-                db.commit()
-
         return {
             "task_id": task_id,
             "progress": progress_info.get("progress"),
@@ -623,13 +591,10 @@ def get_task_progress(task_id: str, db: Session = Depends(get_db)):
 @app.get("/api/prompts/count_wait/{task_id}")
 def count_success_prompts(task_id: str, db: Session = Depends(get_db)):
     try:
-        # 주어진 task_id로 해당 프롬프트 찾기
         target_prompt = db.query(Prompt).filter(Prompt.task_id == task_id).first()
         
         if not target_prompt:
             raise HTTPException(status_code=404, detail="해당 task_id에 대한 프롬프트를 찾을 수 없습니다.")
-
-        # 해당 프롬프트의 created_at 시간 가져오기
         target_created_at = target_prompt.created_at
 
         # 가장 최근에 생성된 'success' 상태의 프롬프트 찾기
@@ -641,7 +606,7 @@ def count_success_prompts(task_id: str, db: Session = Depends(get_db)):
         if not last_success_prompt:
             raise HTTPException(status_code=404, detail="가장 최근의 성공한 프롬프트를 찾을 수 없습니다.")
 
-        # target_prompt에서 마지막 success 프롬프트까지의 남은 프롬프트 개수 계산
+        # 남은 프롬프트 개수 계산
         remaining_prompts_count = db.query(Prompt).filter(
             Prompt.created_at > last_success_prompt.created_at,
             Prompt.created_at <= target_created_at
@@ -655,7 +620,7 @@ def count_success_prompts(task_id: str, db: Session = Depends(get_db)):
 
 # RabbitMQ 관리 API를 통해 큐 상태 가져오기
 def get_rabbitmq_queue_status(queue_name: str):
-    url = f"http://118.67.128.129:15672/api/queues/%2F/{queue_name}"  # %2F는 기본 vhost를 의미
+    url = f"http://118.67.128.129:15672/api/queues/%2F/{queue_name}" 
     try:
         response = requests.get(url, auth=HTTPBasicAuth('guest', 'guest'))  # RabbitMQ 관리 API에 접근
         if response.status_code == 200:
