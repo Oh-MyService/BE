@@ -37,6 +37,7 @@ from minio import Minio
 from celery_worker import generate_and_send_image, app as celery_app
 import requests
 from requests.auth import HTTPBasicAuth
+import random
 
 # Load environment variables
 load_dotenv()
@@ -223,8 +224,8 @@ def create_prompt(
     logging.debug(f"Received request to create prompt with positive prompt: {positive_prompt} for user ID: {current_user.id}")
     try:
         content ={
-            "positive_prompt": str(positive_prompt) if positive_prompt is not None else None,
-            "negative_prompt": " "#str(negative_prompt) if negative_prompt is not None else None
+            "positive_prompt": (str(positive_prompt)+", seamless pattern, fabric textiled pattern") if positive_prompt is not None else None,
+            "negative_prompt": "irregular shape, deformed, asymmetrical, wavy lines, blurred, low quality, on fabric, real photo, shadow, cracked, text, naked human, violence"#str(negative_prompt) if negative_prompt is not None else None
         }
 
         ai_option = {
@@ -234,7 +235,7 @@ def create_prompt(
             "mood": str(mood) if mood is not None else None,
             "cfg_scale": float(cfg_scale) if cfg_scale is not None else None, 
             "sampling_steps": 20,#int(sampling_steps) if sampling_steps is not None else None,
-            "seed": int(seed) if seed is not None else None
+            "seed": random.randint(0, 999999) if seed == -1 else int(seed)
         }
 
         # None 값 제거
