@@ -576,26 +576,11 @@ redis_client = redis.Redis(host='118.67.128.129', port=6379, db=0)
 @app.get("/progress/{task_id}")
 def get_task_progress(task_id: str, db: Session = Depends(get_db)):
     try:
-        # task_id에 해당하는 프롬프트의 상태를 확인
-        prompt = db.query(Prompt).filter(Prompt.task_id == task_id).first()
-
-        if not prompt:
-            raise HTTPException(status_code=404, detail="프롬프트를 찾을 수 없습니다.")
-
-        # 프롬프트의 상태가 success가 아닐 경우 progress를 0으로 설정
-        if prompt.status != "success":
-            return {
-                "task_id": task_id,
-                "progress": 0,
-                "estimated_remaining_time": None
-            }
-
-        # Redis에서 progress 정보를 가져옴
         redis_key = f"task_progress:{task_id}"
         progress_data = redis_client.get(redis_key)
 
         if not progress_data:
-            raise HTTPException(status_code=404, detail="Progress data not found")
+            raise HTTPException(status_code=404, detail="Progress data not found, 작업중이지 않거나 끝남")
 
         progress_info = json.loads(progress_data)
         return {
@@ -606,7 +591,6 @@ def get_task_progress(task_id: str, db: Session = Depends(get_db)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving progress: {e}")
-
 
 # 남은 큐 개수 반환
 @app.get("/api/prompts/count_wait/{task_id}")
