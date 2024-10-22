@@ -285,14 +285,14 @@ def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_us
         # 프롬프트 상태가 success 인지 확인
         if prompt.status != "success":
             raise HTTPException(status_code=400, detail="프롬프트 상태가 'success'가 아닙니다.")
+        else:
+            # 결과 조회
+            results = db.query(Result).filter(Result.prompt_id == prompt_id).all()
 
-        # 결과 조회
-        results = db.query(Result).filter(Result.prompt_id == prompt_id).all()
+            for result in results:
+                result.image_data = result.image_data  # MinIO URL
 
-        for result in results:
-            result.image_data = result.image_data  # MinIO URL
-
-        return {"message": "성공적으로 모든 이미지를 가져왔습니다.", "results": results}
+            return {"message": "성공적으로 모든 이미지를 가져왔습니다.", "results": results}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"프롬프트 결과를 가져오는 중 오류 발생: {e}")
@@ -662,13 +662,7 @@ SMTP_USER = os.getenv("GMAIL_USER")  # .env에서 가져옴
 SMTP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")  # 앱 비밀번호
 # 비밀번호 해시화 설정
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-# 데이터베이스 연결을 위한 세션
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+
 # 이메일 전송 함수
 def send_reset_email(to_email: str, reset_token: str):
     sender_email = SMTP_USER
