@@ -224,11 +224,8 @@ def create_prompt(
 ):
     logging.debug(f"Received request to create prompt with positive prompt: {positive_prompt} for user ID: {current_user.id}")
     try:
-        content ={
-            "positive_prompt": (str(positive_prompt)+", seamless pattern, fabric textiled pattern") if positive_prompt is not None else None,
-            "negative_prompt": "irregular shape, deformed, asymmetrical, wavy lines, blurred, low quality, on fabric, real photo, shadow, cracked, text, naked human, violence"#str(negative_prompt) if negative_prompt is not None else None
-        }
-
+        pos_prompt = str(positive_prompt) if positive_prompt is not None else None
+        
         ai_option = {
             "width": 1024,#int(width) if width is not None else None,
             "height": 1024,#int(height) if height is not None else None,
@@ -237,6 +234,18 @@ def create_prompt(
             "cfg_scale": float(cfg_scale) if cfg_scale is not None else None, 
             "sampling_steps": 20,#int(sampling_steps) if sampling_steps is not None else None,
             "seed": random.randint(0, 999999) if seed == -1 else int(seed)
+        }
+
+        mood = str(mood)
+        background_color = str(background_color)
+        if (mood is not None) or (mood == "not_exist"):
+            pos_prompt = pos_prompt+", "+mood
+        if (background_color is not None) or (background_color == "not_exist"):
+            pos_prompt = pos_prompt+", "+background_color
+
+        content ={
+            "positive_prompt": pos_prompt+", seamless pattern, fabric textiled pattern, high quality, masterpiece",
+            "negative_prompt": "irregular shape, deformed, asymmetrical, wavy lines, blurred, low quality, on fabric, real photo, shadow, cracked, text, naked human, violence, terror"#str(negative_prompt) if negative_prompt is not None else None
         }
 
         # None 값 제거
