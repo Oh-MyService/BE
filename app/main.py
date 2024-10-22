@@ -278,12 +278,15 @@ def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_us
         # 프롬프트 조회
         prompt = crud.get_record(db=db, model=Prompt, record_id=prompt_id)
         if not prompt:
+            logging.error("프롬프트를 찾을 수 없습니다.")
             raise HTTPException(status_code=404, detail="프롬프트를 찾을 수 없습니다.")
         if prompt.user_id != current_user.id:
+            logging.error("해당 프롬프트에 접근할 권한이 없습니다.")
             raise HTTPException(status_code=403, detail="해당 프롬프트에 접근할 권한이 없습니다.")
 
         # 프롬프트 상태가 success 인지 확인
         if prompt.status != "success":
+            logging.error("프롬프트 상태가 'success'가 아닙니다.")
             raise HTTPException(status_code=400, detail="프롬프트 상태가 'success'가 아닙니다.")
         else:
             # 결과 조회
