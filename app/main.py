@@ -38,6 +38,7 @@ from celery_worker import generate_and_send_image, app as celery_app
 import requests
 from requests.auth import HTTPBasicAuth
 import random
+from celery.result import AsyncResult
 
 # Load environment variables
 load_dotenv()
@@ -279,15 +280,15 @@ def get_prompt_results(prompt_id: int, db: Session = Depends(get_db), current_us
         prompt = crud.get_record(db=db, model=Prompt, record_id=prompt_id)
         if not prompt:
             logging.error("프롬프트를 찾을 수 없습니다.")
-            raise HTTPException(status_code=404, detail="프롬프트를 찾을 수 없습니다.")
+            #raise HTTPException(status_code=404, detail="프롬프트를 찾을 수 없습니다.")
         if prompt.user_id != current_user.id:
             logging.error("해당 프롬프트에 접근할 권한이 없습니다.")
-            raise HTTPException(status_code=403, detail="해당 프롬프트에 접근할 권한이 없습니다.")
+            #raise HTTPException(status_code=403, detail="해당 프롬프트에 접근할 권한이 없습니다.")
 
         # 프롬프트 상태가 success 인지 확인
         if prompt.status != "success":
             logging.error("프롬프트 상태가 'success'가 아닙니다.")
-            raise HTTPException(status_code=400, detail="프롬프트 상태가 'success'가 아닙니다.")
+            #raise HTTPException(status_code=400, detail="프롬프트 상태가 'success'가 아닙니다.")
         else:
             # 결과 조회
             results = db.query(Result).filter(Result.prompt_id == prompt_id).all()
@@ -579,6 +580,7 @@ redis_client = redis.Redis(host='118.67.128.129', port=6379, db=0)
 @app.get("/progress/{task_id}")
 def get_task_progress(task_id: str, db: Session = Depends(get_db)):
     try:
+        task_result = AsyncResult(task_id, app=celery_app)
         redis_key = f"task_progress:{task_id}"
         progress_data = redis_client.get(redis_key)
 
@@ -586,6 +588,14 @@ def get_task_progress(task_id: str, db: Session = Depends(get_db)):
             raise HTTPException(status_code=404, detail="Progress data not found, 작업중이지 않거나 끝남")
 
         progress_info = json.loads(progress_data)
+        if progress_info.get("progress") == 100 and task_result.state == 'PENDING':
+            logging.info("100 percent but pending...")
+            return {
+                "task_id": task_id,
+                "progress": 99,
+                "estimated_remaining_time": progress_info.get("estimated_remaining_time")
+            }
+        
         return {
             "task_id": task_id,
             "progress": progress_info.get("progress"),
