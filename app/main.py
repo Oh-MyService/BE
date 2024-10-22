@@ -239,9 +239,9 @@ def create_prompt(
         mood = str(mood)
         background_color = str(background_color)
         if (mood is not None) or (mood == "not_exist"):
-            pos_prompt = pos_prompt+", "+mood
+            pos_prompt = pos_prompt+", "+mood+" style"
         if (background_color is not None) or (background_color == "not_exist"):
-            pos_prompt = pos_prompt+", "+background_color
+            pos_prompt = pos_prompt+", "+background_color+" background color"
 
         content ={
             "positive_prompt": pos_prompt+", seamless pattern, fabric textiled pattern, high quality, masterpiece",
