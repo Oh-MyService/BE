@@ -239,7 +239,7 @@ def create_prompt(
 
         mood = str(mood)
         background_color = str(background_color)
-        if (mood is not None) and (mood is not "not_exist") and (mood is not ""):
+        if (mood is not None) and (mood != "not_exist") and (mood != ""):
             pos_prompt = pos_prompt+", "+mood+" style fabric design"
         if (background_color is not None) and (background_color is not "not_exist") and (background_color is not ""):
             pos_prompt = pos_prompt+", "+background_color+" background color"
