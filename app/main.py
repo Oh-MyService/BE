@@ -226,14 +226,17 @@ def create_prompt(
     try:
         pos_prompt = str(positive_prompt) if positive_prompt is not None else None
         pos_prompt = "["+pos_prompt+"]"
+    
+        if mood == "not_exist":
+            mood = None 
         
         ai_option = {
-            "width": 1024,#int(width) if width is not None else None,
-            "height": 1024,#int(height) if height is not None else None,
+            "width": 1024,
+            "height": 1024,
             "background_color": str(background_color) if background_color is not None else None,
-            "mood": str(mood) if mood is not None else None,
+            "mood": mood,  
             "cfg_scale": float(cfg_scale) if cfg_scale is not None else None, 
-            "sampling_steps": 20,#int(sampling_steps) if sampling_steps is not None else None,
+            "sampling_steps": 20,
             "seed": random.randint(0, 999999) if seed == -1 else int(seed)
         }
 
