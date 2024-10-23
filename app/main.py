@@ -228,7 +228,7 @@ def create_prompt(
         pos_prompt = "["+pos_prompt+"]"
     
         if mood == "not_exist":
-            mood = None 
+            mood = ""
         
         ai_option = {
             "width": 1024,
