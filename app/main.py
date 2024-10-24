@@ -225,7 +225,7 @@ def create_prompt(
     logging.debug(f"Received request to create prompt with positive prompt: {positive_prompt} for user ID: {current_user.id}")
     try:
         pos_prompt = str(positive_prompt) if positive_prompt is not None else None
-        pos_prompt = "["+pos_prompt+"]"
+        pos_prompt = pos_prompt
     
         if mood == "not_exist":
             mood = ""
@@ -248,7 +248,7 @@ def create_prompt(
             pos_prompt = pos_prompt+", "+background_color+" background color"
 
         content ={
-            "positive_prompt": f"A repeating pattern of ${pos_prompt}, seamlessly integrated into a high-quality fabric textile design, masterpiece.", #pos_prompt+" , seamless pattern, fabric textiled pattern, high quality, masterpiece",
+            "positive_prompt": f"A repeating pattern of {pos_prompt}, seamlessly integrated into a high-quality fabric textile design, masterpiece.", #pos_prompt+" , seamless pattern, fabric textiled pattern, high quality, masterpiece",
             "negative_prompt": "irregular shape, deformed, asymmetrical, wavy lines, blurred, low quality, on fabric, real photo, shadow, cracked, text, naked human, violence, terror"#str(negative_prompt) if negative_prompt is not None else None
         }
 
