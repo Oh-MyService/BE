@@ -106,6 +106,7 @@ class AIOption(BaseModel):
 class Content(BaseModel):
     positive_prompt: str
     negative_prompt: str
+    modified_prompt: str
 
 # PromptRequest 모델 생성
 class PromptRequest(BaseModel):
@@ -248,8 +249,9 @@ def create_prompt(
         #    pos_prompt = pos_prompt+", "+background_color+" background color"
 
         content ={
-            "positive_prompt": f"A repeating pattern of {pos_prompt}, seamless fabric textile design, masterpiece.", #pos_prompt+" , seamless pattern, fabric textiled pattern, high quality, masterpiece",
-            "negative_prompt": "irregular shape, deformed, asymmetrical, wavy lines, blurred, low quality, on fabric, real photo, shadow, cracked, text, naked human, violence, terror"#str(negative_prompt) if negative_prompt is not None else None
+            "positive_prompt": pos_prompt,
+            "negative_prompt": "irregular shape, deformed, asymmetrical, wavy lines, blurred, low quality, on fabric, real photo, shadow, cracked, text, naked human, violence, terror",#str(negative_prompt) if negative_prompt is not None else None
+            "modified_prompt":f"A repeating pattern of {pos_prompt}, seamless fabric textile design, masterpiece." #pos_prompt+" , seamless pattern, fabric textiled pattern, high quality, masterpiece",
         }
 
         # None 값 제거
