@@ -215,8 +215,8 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 @app.post("/api/prompts")
 def create_prompt(
     positive_prompt: str = Form(...),  
-    background_color: Optional[str] = Form(...),  
-    mood: Optional[str] = Form(...),  
+    #background_color: Optional[str] = Form(...),  
+    #mood: Optional[str] = Form(...),  
     cfg_scale: Optional[float] = Form(...),  
     seed: Optional[int] = Form(...),  
     db: Session = Depends(get_db),
@@ -227,25 +227,25 @@ def create_prompt(
         pos_prompt = str(positive_prompt) if positive_prompt is not None else None
         pos_prompt = pos_prompt
     
-        if mood == "not_exist":
-            mood = ""
+        #if mood == "not_exist":
+        #    mood = ""
         
         ai_option = {
             "width": 1024,
             "height": 1024,
-            "background_color": str(background_color) if background_color is not None else None,
-            "mood": mood,  
+            "background_color": "",#str(background_color) if background_color is not None else None,
+            "mood": "",#mood, 
             "cfg_scale": float(cfg_scale) if cfg_scale is not None else None, 
             "sampling_steps": 20,
             "seed": random.randint(0, 999999) if seed == -1 else int(seed)
         }
 
-        mood = str(mood)
-        background_color = str(background_color)
-        if (mood is not None) and (mood is not "not_exist") and (mood is not ""):
-            pos_prompt = pos_prompt+", "+mood+" style fabric design"
-        if (background_color is not None) and (background_color is not "not_exist") and (background_color is not ""):
-            pos_prompt = pos_prompt+", "+background_color+" background color"
+        #mood = str(mood)
+        #background_color = str(background_color)
+        #if (mood is not None) and (mood is not "not_exist") and (mood is not ""):
+        #    pos_prompt = pos_prompt+", "+mood+" style fabric design"
+        #if (background_color is not None) and (background_color is not "not_exist") and (background_color is not ""):
+        #    pos_prompt = pos_prompt+", "+background_color+" background color"
 
         content ={
             "positive_prompt": f"A repeating pattern of {pos_prompt}, seamless fabric textile design, masterpiece.", #pos_prompt+" , seamless pattern, fabric textiled pattern, high quality, masterpiece",
