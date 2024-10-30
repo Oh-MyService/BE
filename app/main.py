@@ -253,7 +253,7 @@ def create_prompt(
             "positive_prompt": pos_prompt,
             "negative_prompt": "irregular shape, deformed, asymmetrical, wavy lines, blurred, low quality, on fabric, real photo, shadow, cracked, text",#str(negative_prompt) if negative_prompt is not None else None
             "modified_prompt":f"A repeating pattern of {pos_prompt}, seamless fabric textile design, masterpiece.", #pos_prompt+" , seamless pattern, fabric textiled pattern, high quality, masterpiece",
-            "model_name": "autismmixSDXL_autismmixLightning"
+            "model_name": "juggernautXL_juggXILightningByRD"
         }
 
         # None 값 제거
