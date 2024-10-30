@@ -232,8 +232,8 @@ def create_prompt(
         #    mood = ""
         
         ai_option = {
-            "width": 512,
-            "height": 512,
+            "width": 1024,
+            "height": 1024,
             "background_color": "",#str(background_color) if background_color is not None else None,
             "mood": "",#mood, 
             "cfg_scale": float(cfg_scale) if cfg_scale is not None else None, 
