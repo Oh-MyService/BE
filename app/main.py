@@ -50,6 +50,8 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # Define origins
 origins = [
+    "http://ohmyservice.duckdns.org",
+    "https://ohmyservice.duckdns.org",
     "http://118.67.128.129:28282",
     "http://118.67.128.129:25252"
 ]
