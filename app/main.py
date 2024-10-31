@@ -238,7 +238,7 @@ def create_prompt(
             "background_color": "",#str(background_color) if background_color is not None else None,
             "mood": "",#mood, 
             "cfg_scale": float(cfg_scale) if cfg_scale is not None else None, 
-            "sampling_steps": 8,
+            "sampling_steps": 4,
             "seed": random.randint(0, 999999) if seed == -1 else int(seed)
         }
 
